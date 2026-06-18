@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>會計室核銷端｜晨光幼兒園 FHIR 智慧行政</title>
+<style>
+  :root{ --green:#1f6b54; --green-d:#1f3a33; --bg:#eef3f0; --line:#d4e0da; --soft:#f2f6f3; --warn:#c0392b; --ok:#1f8b5f; --amber:#b8842b; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:system-ui,"Microsoft JhengHei","PingFang TC",sans-serif; background:var(--bg); color:var(--green-d); }
+  header{ background:var(--green); color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  header h1{ font-size:19px; margin:0; }
+  header .meta{ font-size:12px; color:#cfe7dd; text-align:right; }
+  header a{ color:#cfe7dd; }
+  nav.tabs{ display:flex; gap:4px; background:#185a47; padding:0 12px; overflow-x:auto; }
+  nav.tabs button{ background:none; border:none; color:#bfe0d4; padding:13px 16px; font-size:15px; font-weight:700; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap; }
+  nav.tabs button.active{ color:#fff; border-bottom-color:#ffd479; }
+  main{ max-width:1080px; margin:0 auto; padding:20px 16px 70px; }
+  .panel{ display:none; } .panel.active{ display:block; }
+  .card{ background:#fff; border-radius:14px; box-shadow:0 4px 18px rgba(31,107,84,.08); padding:20px; margin-bottom:18px; }
+  h2{ font-size:17px; margin:0 0 4px; } h3{ font-size:15px; margin:18px 0 8px; }
+  .sub{ color:#7c8b84; font-size:13px; margin:0 0 14px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+  label{ display:block; font-size:13px; font-weight:700; margin-bottom:5px; color:#3f534b; }
+  input,select{ width:100%; padding:10px; border:1.5px solid var(--line); border-radius:9px; font-size:15px; background:#fff; }
+  .btn{ border:none; border-radius:9px; padding:11px 18px; font-size:15px; font-weight:700; cursor:pointer; color:#fff; background:var(--green); }
+  .btn.amber{ background:var(--amber); } .btn.gray{ background:#e3eae6; color:var(--green-d); } .btn.red{ background:var(--warn); }
+  .btn.sm{ padding:6px 11px; font-size:13px; }
+  .row{ display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-top:12px; }
+  table{ width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+  th,td{ padding:9px 8px; border-bottom:1px solid var(--line); text-align:left; }
+  th{ color:#5a6b63; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+  td.r,th.r{ text-align:right; } td.c,th.c{ text-align:center; }
+  .tag{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+  .tag.month{ background:#e3eefb; color:#2456a6; } .tag.hour{ background:#fdeccd; color:#9a6512; }
+  .tag.free{ background:#e6f5ee; color:var(--ok); } .tag.busy{ background:#f1e2e0; color:var(--warn); }
+  .tag.in{ background:#fdeccd; color:#9a6512; } .tag.fin{ background:#e6f5ee; color:var(--ok); }
+  .tag.ok{ background:#e6f5ee; color:var(--ok); } .tag.pend{ background:#eee; color:#666; }
+  .msg{ padding:12px 14px; border-radius:10px; font-size:14px; margin-top:12px; display:none; }
+  .msg.ok{ display:block; background:#e6f5ee; color:var(--ok); border:1px solid #b7e3cd; }
+  .msg.err{ display:block; background:#fbeae8; color:var(--warn); border:1px solid #f1c9c3; white-space:pre-wrap; }
+  .muted{ color:#7c8b84; } .right{ text-align:right; }
+  .pill{ font-size:12px; padding:3px 10px; border-radius:999px; background:var(--soft); }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .payslip{ border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-top:12px; }
+  .payslip .net{ background:var(--green); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; font-size:20px; font-weight:800; }
+  /* 列印核銷清冊：僅保留財務總表 */
+  @media print{
+    header,nav.tabs,.no-print,.btn{ display:none !important; }
+    .panel{ display:none !important; } #printArea{ display:block !important; }
+    body{ background:#fff; } main{ padding:0; }
+  }
+  #printArea{ display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 會計室核銷端</h1>
+  <div class="meta">
+    <div id="health">● 連線檢查中…</div>
+    <div><a href="/clock.html">← 員工打卡端</a>　<span id="tenant"></span></div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="staff" class="active">人事資料</button>
+  <button data-tab="schedule">排班</button>
+  <button data-tab="attend">出勤稽核</button>
+  <button data-tab="settle">月底結算</button>
+  <button data-tab="approve">簽核發薪</button>
+  <button data-tab="payout">撥款媒體檔</button>
+</nav>
+
+<main>
+  <!-- ============ 人事 ============ -->
+  <section class="panel active" id="panel-staff">
+    <div class="card">
+      <h2>人事資料 <span class="muted" style="font-size:13px">（FHIR Practitioner・依本薪自動判定薪資模式）</span></h2>
+      <p class="sub">本薪 &gt; 0 → 月薪制（含津貼與勞健保）；本薪 = 0 → 純時薪制（自動封鎖津貼與保費代扣）。</p>
+      <div class="grid">
+        <div><label>員工編號</label><input id="f-emp" placeholder="T001"></div>
+        <div><label>姓名</label><input id="f-name" placeholder="王曉明"></div>
+        <div><label>本薪（0＝純時薪）</label><input id="f-base" type="number" value="0"></div>
+        <div><label>時薪</label><input id="f-hourly" type="number" value="0"></div>
+        <div><label>延護費率（元/時）</label><input id="f-after" type="number" value="0"></div>
+        <div><label>加班費率（元/時）</label><input id="f-ot" type="number" value="0"></div>
+        <div><label>勞保自付額</label><input id="f-labor" type="number" value="0"></div>
+        <div><label>健保自付額</label><input id="f-health" type="number" value="0"></div>
+        <div><label>銀行代碼</label><input id="f-bcode" value="006"></div>
+        <div><label>銀行帳號</label><input id="f-bacc" placeholder="1234567890123"></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="staff-save">儲存員工</button>
+        <button class="btn gray sm" id="staff-clear">清空</button>
+        <span style="flex:1"></span>
+        <button class="btn gray sm" id="ex-a">填入情境A（月薪導師）</button>
+        <button class="btn gray sm" id="ex-b">填入情境B（時薪工讀）</button>
+      </div>
+      <div class="msg" id="staff-msg"></div>
+    </div>
+    <div class="card">
+      <h3>員工清單</h3>
+      <table><thead><tr><th>編號</th><th>姓名</th><th>模式</th><th class="r">本薪</th><th class="r">時薪</th><th class="r">延護/加班</th><th class="r">勞/健保</th><th>銀行帳號</th><th class="c">操作</th></tr></thead>
+      <tbody id="staff-rows"><tr><td colspan="9" class="muted">載入中…</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ 排班 ============ -->
+  <section class="panel" id="panel-schedule">
+    <div class="card">
+      <h2>排班 <span class="muted" style="font-size:13px">（Schedule → Slot → Appointment 三層模型）</span></h2>
+      <p class="sub">Schedule 定義可排範圍，Slot 為具體時段（free/busy），Appointment 為實際預約並佔用 Slot。</p>
+      <h3>① 建立可排範圍 Schedule</h3>
+      <div class="grid">
+        <div><label>人員</label><select id="s-pr"></select></div>
+        <div><label>起日</label><input id="s-start" type="date"></div>
+        <div><label>迄日</label><input id="s-end" type="date"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="s-add">建立 Schedule</button></div>
+      </div>
+      <h3>② 新增可排時段 Slot</h3>
+      <div class="grid">
+        <div><label>所屬 Schedule</label><select id="sl-sched"></select></div>
+        <div><label>開始</label><input id="sl-start" type="datetime-local"></div>
+        <div><label>結束</label><input id="sl-end" type="datetime-local"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="sl-add">新增 Slot</button></div>
+      </div>
+      <h3>③ 預約排班 Appointment</h3>
+      <div class="grid">
+        <div><label>選擇 Slot（free）</label><select id="ap-slot"></select></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn amber" id="ap-add">預約（佔用時段）</button></div>
+      </div>
+      <div class="msg" id="sched-msg"></div>
+    </div>
+    <div class="card">
+      <h3>時段與預約狀態</h3>
+      <table><thead><tr><th>人員</th><th>開始</th><th>結束</th><th class="c">狀態</th></tr></thead>
+      <tbody id="slot-rows"><tr><td colspan="4" class="muted">尚無資料</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ 出勤稽核 ============ -->
+  <section class="panel" id="panel-attend">
+    <div class="card">
+      <h2>出勤稽核 <span class="muted" style="font-size:13px">（FHIR Encounter・缺簽退即時標記與補登）</span></h2>
+      <p class="sub">未簽退（in-progress）即標記為異常；補登簽退時間後，工時自動重算。</p>
+      <div class="row">
+        <div style="min-width:240px"><label>篩選人員</label><select id="at-pr"><option value="">全部</option></select></div>
+        <button class="btn gray" id="at-reload">重新整理</button>
+        <span class="pill" id="at-stat"></span>
+      </div>
+      <table><thead><tr><th>姓名</th><th>類別</th><th>日期</th><th class="c">簽到</th><th class="c">簽退</th><th class="r">工時</th><th class="c">狀態</th><th class="c">操作</th></tr></thead>
+      <tbody id="at-rows"><tr><td colspan="8" class="muted">載入中…</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ 結算 ============ -->
+  <section class="panel" id="panel-settle">
+    <div class="card">
+      <h2>月底結算 <span class="muted" style="font-size:13px">（FHIR Claim・工資綁定出勤證據，異常則阻斷）</span></h2>
+      <p class="sub">系統自動彙整期間工時並裁決薪資；若有缺簽退將阻斷結算並列出待修正清單。</p>
+      <div class="grid">
+        <div><label>人員</label><select id="se-pr"></select></div>
+        <div><label>結算期間起</label><input id="se-start" type="date"></div>
+        <div><label>結算期間迄</label><input id="se-end" type="date"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="se-run">執行結算</button></div>
+      </div>
+      <div class="msg" id="se-msg"></div>
+      <div id="se-result"></div>
+    </div>
+  </section>
+
+  <!-- ============ 簽核 ============ -->
+  <section class="panel" id="panel-approve">
+    <div class="card">
+      <h2>簽核發薪 <span class="muted" style="font-size:13px">（FHIR ClaimResponse・園長核准）</span></h2>
+      <p class="sub">園長檢視結算單與關聯出勤後核准，核准後即可產生撥款媒體檔。</p>
+      <div class="row no-print">
+        <button class="btn gray" id="ap-reload">重新整理</button>
+        <button class="btn amber" id="ap-print">🖨 列印核銷清冊</button>
+      </div>
+      <table><thead><tr><th>姓名</th><th>期間</th><th>模式</th><th class="r">應發</th><th class="r">扣款</th><th class="r">實發</th><th class="c">狀態</th><th class="c no-print">操作</th></tr></thead>
+      <tbody id="cl-rows"><tr><td colspan="8" class="muted">載入中…</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ 撥款 ============ -->
+  <section class="panel" id="panel-payout">
+    <div class="card">
+      <h2>撥款媒體檔 <span class="muted" style="font-size:13px">（合作金庫 salary.txt・由已核准 ClaimResponse 自動生成）</span></h2>
+      <p class="sub">格式：銀行代碼＋帳號＋金額＋姓名，杜絕手工繕打帳號金額之誤。</p>
+      <div class="row">
+        <div><label>期間起</label><input id="po-start" type="date"></div>
+        <div><label>期間迄</label><input id="po-end" type="date"></div>
+        <button class="btn gray" id="po-prev">預覽撥款清冊</button>
+        <button class="btn" id="po-dl">⬇ 下載 salary.txt</button>
+      </div>
+      <div class="msg" id="po-msg"></div>
+      <table><thead><tr><th>姓名</th><th>編號</th><th>銀行代碼</th><th>帳號</th><th class="r">撥款金額</th></tr></thead>
+      <tbody id="po-rows"><tr><td colspan="5" class="muted">請先預覽</td></tr></tbody>
+      <tfoot id="po-foot"></tfoot></table>
+    </div>
+  </section>
+</main>
+
+<!-- 列印用核銷清冊（平時隱藏，列印時僅顯示此區） -->
+<div id="printArea"></div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+const NT = (n)=> 'NT$'+Number(n||0).toLocaleString('zh-TW');
+const fmtT = (iso)=> iso ? new Date(iso).toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'}) : '—';
+const fmtD = (iso)=> iso ? new Date(iso).toLocaleDateString('zh-TW') : '—';
+
+async function api(url, opts){
+  const r = await fetch(url, opts);
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok){ const e=new Error(data.error||('錯誤 '+r.status)); e.data=data; throw e; }
+  return data;
+}
+function msg(el, text, ok){ const m=$(el); m.textContent=text; m.className='msg '+(ok?'ok':'err'); }
+
+// 預設本月期間
+(function(){
+  const n=new Date(), y=n.getFullYear(), m=n.getMonth();
+  const s=new Date(y,m,1), e=new Date(y,m+1,0);
+  const iso=(d)=>d.toISOString().slice(0,10);
+  ['se-start','po-start'].forEach(id=>$('#'+id).value=iso(s));
+  ['se-end','po-end'].forEach(id=>$('#'+id).value=iso(e));
+})();
+
+// ---- 分頁 ----
+document.querySelectorAll('nav.tabs button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); $('#panel-'+b.dataset.tab).classList.add('active');
+    loaders[b.dataset.tab]?.();
+  });
+});
+
+// ---- 健檢 / 設定 ----
+fetch('/api/config').then(r=>r.json()).then(c=>{ $('#tenant').textContent='FHIR：'+c.fhirBaseUrl+'｜租戶：'+c.tenantTag; });
+fetch('/api/health').then(r=>r.json()).then(h=>{
+  $('#health').innerHTML = h.ok
+    ? `<span class="dot" style="background:#7CFFB2"></span>已連線 FHIR（${h.software||'server'} ${h.fhirVersion||''}）`
+    : `<span class="dot" style="background:#ffb3a7"></span>連線失敗：${h.error||''}`;
+}).catch(()=>{ $('#health').textContent='連線檢查失敗'; });
+
+// ================= 人事 =================
+let staffCache = [];
+async function loadStaff(){
+  try{
+    staffCache = await api('/api/practitioners');
+    const opts = '<option value="">— 選擇 —</option>'+staffCache.map(p=>`<option value="${p.id}">${p.name}（${p.employeeId}）</option>`).join('');
+    ['#s-pr','#se-pr','#at-pr'].forEach(sel=>{ const cur=$(sel).value; $(sel).innerHTML = (sel==='#at-pr'?'<option value="">全部</option>':'')+opts; });
+    $('#staff-rows').innerHTML = staffCache.length ? staffCache.map(p=>`<tr>
+      <td>${p.employeeId}</td><td><b>${p.name}</b></td>
+      <td>${p.salaryMode==='monthly'?'<span class="tag month">月薪制</span>':'<span class="tag hour">純時薪</span>'}</td>
+      <td class="r">${p.baseSalary?NT(p.baseSalary):'—'}</td>
+      <td class="r">${p.hourlyRate?NT(p.hourlyRate):'—'}</td>
+      <td class="r">${p.afterCareRate||0}/${p.overtimeRate||0}</td>
+      <td class="r">${p.laborInsurance||0}/${p.healthInsurance||0}</td>
+      <td>${p.bankCode}-${p.bankAccount||'—'}</td>
+      <td class="c"><button class="btn gray sm" onclick="editStaff('${p.id}')">編輯</button>
+      <button class="btn red sm" onclick="delStaff('${p.id}','${p.name}')">刪</button></td>
+    </tr>`).join('') : '<tr><td colspan="9" class="muted">尚無員工，請新增。</td></tr>';
+  }catch(e){ $('#staff-rows').innerHTML='<tr><td colspan="9" class="err">'+e.message+'</td></tr>'; }
+}
+function staffForm(){ return {
+  employeeId:$('#f-emp').value.trim(), name:$('#f-name').value.trim(),
+  baseSalary:+$('#f-base').value||0, hourlyRate:+$('#f-hourly').value||0,
+  afterCareRate:+$('#f-after').value||0, overtimeRate:+$('#f-ot').value||0,
+  laborInsurance:+$('#f-labor').value||0, healthInsurance:+$('#f-health').value||0,
+  bankCode:$('#f-bcode').value.trim()||'006', bankAccount:$('#f-bacc').value.trim() }; }
+let editingId=null;
+function fillForm(p){ editingId=p.id||null;
+  $('#f-emp').value=p.employeeId||''; $('#f-name').value=p.name||'';
+  $('#f-base').value=p.baseSalary||0; $('#f-hourly').value=p.hourlyRate||0;
+  $('#f-after').value=p.afterCareRate||0; $('#f-ot').value=p.overtimeRate||0;
+  $('#f-labor').value=p.laborInsurance||0; $('#f-health').value=p.healthInsurance||0;
+  $('#f-bcode').value=p.bankCode||'006'; $('#f-bacc').value=p.bankAccount||''; }
+window.editStaff=(id)=>{ const p=staffCache.find(x=>x.id===id); if(p){fillForm(p); window.scrollTo({top:0,behavior:'smooth'});} };
+window.delStaff=async(id,name)=>{ if(!confirm('確定刪除 '+name+'？')) return;
+  try{ await api('/api/practitioners/'+id,{method:'DELETE'}); loadStaff(); }catch(e){ msg('#staff-msg',e.message,false);} };
+$('#staff-save').addEventListener('click', async()=>{
+  const body=staffForm(); if(!body.name||!body.employeeId) return msg('#staff-msg','請填寫員工編號與姓名',false);
+  try{
+    if(editingId){ await api('/api/practitioners/'+editingId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); }
+    else{ await api('/api/practitioners',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); }
+    msg('#staff-msg','✅ 已儲存：'+body.name+(body.baseSalary>0?'（月薪制）':'（純時薪制）'),true);
+    fillForm({}); editingId=null; loadStaff();
+  }catch(e){ msg('#staff-msg',e.message,false); }
+});
+$('#staff-clear').addEventListener('click',()=>{ fillForm({}); editingId=null; });
+$('#ex-a').addEventListener('click',()=>fillForm({employeeId:'T001',name:'王曉明',baseSalary:42000,hourlyRate:0,afterCareRate:280,overtimeRate:180,laborInsurance:930,healthInsurance:1510,bankCode:'006',bankAccount:'1234567890123'}));
+$('#ex-b').addEventListener('click',()=>fillForm({employeeId:'P001',name:'陳小美',baseSalary:0,hourlyRate:190,afterCareRate:0,overtimeRate:0,laborInsurance:0,healthInsurance:0,bankCode:'006',bankAccount:'9876543210987'}));
+
+// ================= 排班 =================
+async function loadSchedule(){
+  try{
+    const [scheds, slots] = await Promise.all([ api('/api/scheduling/schedules'), api('/api/scheduling/slots') ]);
+    $('#sl-sched').innerHTML = scheds.length? scheds.map(s=>`<option value="Schedule/${s.id}">${s.actor?.[0]?.display||s.id}（${fmtD(s.planningHorizon?.start)}~${fmtD(s.planningHorizon?.end)}）</option>`).join('') : '<option value="">請先建立 Schedule</option>';
+    const free = slots.filter(s=>s.status==='free');
+    $('#ap-slot').innerHTML = free.length? free.map(s=>`<option value="Slot/${s.id}" data-start="${s.start}" data-end="${s.end}">${fmtD(s.start)} ${fmtT(s.start)}–${fmtT(s.end)}</option>`).join('') : '<option value="">無可用時段</option>';
+    $('#slot-rows').innerHTML = slots.length? slots.sort((a,b)=>String(a.start).localeCompare(b.start)).map(s=>`<tr>
+      <td>${schedActor(scheds,s.schedule?.reference)}</td><td>${fmtD(s.start)} ${fmtT(s.start)}</td><td>${fmtT(s.end)}</td>
+      <td class="c">${s.status==='free'?'<span class="tag free">可預約</span>':'<span class="tag busy">已預約</span>'}</td></tr>`).join('') : '<tr><td colspan="4" class="muted">尚無時段</td></tr>';
+  }catch(e){ msg('#sched-msg',e.message,false); }
+}
+function schedActor(scheds, ref){ const id=(ref||'').split('/').pop(); const s=scheds.find(x=>x.id===id); return s?.actor?.[0]?.display||'—'; }
+$('#s-add').addEventListener('click', async()=>{
+  const opt=$('#s-pr').selectedOptions[0]; if(!$('#s-pr').value) return msg('#sched-msg','請選擇人員',false);
+  try{ await api('/api/scheduling/schedules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    practitionerRef:'Practitioner/'+$('#s-pr').value, practitionerName:opt.textContent.split('（')[0],
+    start:$('#s-start').value, end:$('#s-end').value })});
+    msg('#sched-msg','✅ 已建立 Schedule',true); loadSchedule();
+  }catch(e){ msg('#sched-msg',e.message,false); }
+});
+$('#sl-add').addEventListener('click', async()=>{
+  if(!$('#sl-sched').value) return msg('#sched-msg','請先建立並選擇 Schedule',false);
+  try{ await api('/api/scheduling/slots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    scheduleRef:$('#sl-sched').value, start:new Date($('#sl-start').value).toISOString(), end:new Date($('#sl-end').value).toISOString() })});
+    msg('#sched-msg','✅ 已新增 Slot',true); loadSchedule();
+  }catch(e){ msg('#sched-msg',e.message,false); }
+});
+$('#ap-add').addEventListener('click', async()=>{
+  const opt=$('#ap-slot').selectedOptions[0]; if(!$('#ap-slot').value) return msg('#sched-msg','無可預約時段',false);
+  const sched=$('#sl-sched').selectedOptions[0];
+  try{ await api('/api/scheduling/appointments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    slotRef:$('#ap-slot').value, practitionerRef:'Practitioner/'+$('#s-pr').value, practitionerName:(sched?.textContent||'').split('（')[0],
+    start:opt.dataset.start, end:opt.dataset.end })});
+    msg('#sched-msg','✅ 已預約，時段標記為 busy',true); loadSchedule();
+  }catch(e){ msg('#sched-msg',e.message,false); }
+});
+
+// ================= 出勤稽核 =================
+async function loadAttend(){
+  const pid=$('#at-pr').value;
+  try{
+    const list = await api('/api/attendance'+(pid?'?practitionerId='+pid:''));
+    const anomalies=list.filter(e=>e.anomaly).length;
+    $('#at-stat').textContent = `共 ${list.length} 筆　異常（缺簽退）${anomalies} 筆`;
+    $('#at-rows').innerHTML = list.length? list.map(e=>`<tr style="${e.anomaly?'background:#fff6ea':''}">
+      <td>${e.practitionerName||'—'}</td><td>${e.workTypeDisplay}</td><td>${fmtD(e.start)}</td>
+      <td class="c">${fmtT(e.start)}</td><td class="c">${fmtT(e.end)}</td>
+      <td class="r">${e.end?e.hours.toFixed(2):'—'}</td>
+      <td class="c">${e.anomaly?'<span class="tag in">缺簽退</span>':'<span class="tag fin">正常</span>'}</td>
+      <td class="c">${e.anomaly?`<button class="btn amber sm" onclick="fixOut('${e.id}')">補登簽退</button>`:''}</td>
+    </tr>`).join('') : '<tr><td colspan="8" class="muted">尚無出勤紀錄</td></tr>';
+  }catch(e){ $('#at-rows').innerHTML='<tr><td colspan="8" class="err">'+e.message+'</td></tr>'; }
+}
+window.fixOut=async(id)=>{
+  const t=prompt('請輸入補登的簽退時間（格式 YYYY-MM-DDTHH:mm，留空＝現在）:');
+  if(t===null) return;
+  const end = t? new Date(t).toISOString() : new Date().toISOString();
+  try{ await api('/api/attendance/'+id+'/clock-out',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({end})}); loadAttend(); }
+  catch(e){ alert(e.message); }
+};
+$('#at-reload').addEventListener('click',loadAttend);
+$('#at-pr').addEventListener('change',loadAttend);
+
+// ================= 結算 =================
+function payslipHtml(d){
+  const rows=d.lines.map(l=>`<tr><td>${l.label}</td><td class="c">${l.qty!=null?l.qty.toFixed(2)+'時':''}</td><td class="r">${l.rate!=null?NT(l.rate):''}</td><td class="r">${l.kind==='deduction'?'-':''}${NT(l.amount)}</td></tr>`).join('');
+  return `<div class="payslip"><table style="margin:0">
+    <thead><tr><th>項目</th><th class="c">時數</th><th class="r">費率</th><th class="r">金額</th></tr></thead><tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="3" class="r">應發合計</td><td class="r">${NT(d.gross)}</td></tr>
+    <tr><td colspan="3" class="r">扣款合計</td><td class="r">-${NT(d.deductions)}</td></tr></tfoot></table>
+    <div class="net"><span>實發金額</span><span>${NT(d.net)}</span></div></div>`;
+}
+$('#se-run').addEventListener('click', async()=>{
+  const pid=$('#se-pr').value; if(!pid) return msg('#se-msg','請選擇人員',false);
+  $('#se-result').innerHTML=''; msg('#se-msg','結算中…',true);
+  try{
+    const res = await api('/api/claims/settle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      practitionerId:pid, periodStart:$('#se-start').value, periodEnd:$('#se-end').value })});
+    const d=res.detail;
+    msg('#se-msg','✅ 結算完成並建立 Claim（'+(d.mode==='monthly'?'月薪制完整裁決':'純計時裁決')+'）。請至「簽核發薪」核准。',true);
+    $('#se-result').innerHTML = `<h3>${d.practitioner.name}　${d.period.start} ~ ${d.period.end}
+      <span class="tag ${d.mode==='monthly'?'month':'hour'}">${d.mode==='monthly'?'月薪制':'純時薪'}</span></h3>
+      <p class="muted">出勤工時：正常 ${d.hours.regular.toFixed(2)}・延護 ${d.hours.aftercare.toFixed(2)}・加班 ${d.hours.overtime.toFixed(2)}（合計 ${d.hours.total.toFixed(2)} 時）</p>`
+      + payslipHtml(d);
+  }catch(e){
+    if(e.data?.anomalies){
+      msg('#se-msg','⛔ '+e.message,false);
+      $('#se-result').innerHTML='<h3 style="color:#c0392b">待修正之異常出勤</h3>'+
+        '<table><thead><tr><th>類別</th><th>簽到</th><th class="c">狀態</th></tr></thead><tbody>'+
+        e.data.anomalies.map(a=>`<tr><td>${a.workTypeDisplay}</td><td>${fmtD(a.start)} ${fmtT(a.start)}</td><td class="c"><span class="tag in">缺簽退</span></td></tr>`).join('')+
+        '</tbody></table><p class="muted">請至「出勤稽核」分頁補登簽退後再結算。</p>';
+    } else { msg('#se-msg',e.message,false); }
+  }
+});
+
+// ================= 簽核 =================
+let claimsCache=[];
+async function loadClaims(){
+  try{
+    claimsCache = await api('/api/claims');
+    $('#cl-rows').innerHTML = claimsCache.length? claimsCache.map(c=>{ const d=c.detail||{}; return `<tr>
+      <td>${d.practitioner?.name||'—'}</td><td>${d.period?.start||''}~${d.period?.end||''}</td>
+      <td>${d.mode==='monthly'?'<span class="tag month">月薪</span>':'<span class="tag hour">時薪</span>'}</td>
+      <td class="r">${NT(d.gross)}</td><td class="r">-${NT(d.deductions)}</td><td class="r"><b>${NT(d.net)}</b></td>
+      <td class="c">${c.approved?'<span class="tag ok">已核准</span>':'<span class="tag pend">待核准</span>'}</td>
+      <td class="c no-print">${c.approved?'':`<button class="btn sm" onclick="approve('${c.id}')">核准</button>`}</td></tr>`; }).join())
+      : '<tr><td colspan="8" class="muted">尚無結算單</td></tr>';
+  }catch(e){ $('#cl-rows').innerHTML='<tr><td colspan="8" class="err">'+e.message+'</td></tr>'; }
+}
+window.approve=async(id)=>{ try{ await api('/api/claims/'+id+'/approve',{method:'POST'}); loadClaims(); }catch(e){ alert(e.message);} };
+$('#ap-reload').addEventListener('click',loadClaims);
+$('#ap-print').addEventListener('click', ()=>{
+  const approved=claimsCache.filter(c=>c.approved);
+  const today=new Date().toLocaleDateString('zh-TW');
+  const rows=approved.map(c=>{ const d=c.detail; return `<tr><td>${d.practitioner.employeeId}</td><td>${d.practitioner.name}</td><td>${d.period.start}~${d.period.end}</td><td style="text-align:right">${NT(d.gross)}</td><td style="text-align:right">-${NT(d.deductions)}</td><td style="text-align:right"><b>${NT(d.net)}</b></td></tr>`; }).join('');
+  const total=approved.reduce((s,c)=>s+(c.detail?.net||0),0);
+  $('#printArea').innerHTML = `<div style="padding:24px;font-family:'Microsoft JhengHei',sans-serif">
+    <h2 style="text-align:center">晨光幼兒園　薪資核銷清冊</h2>
+    <p style="text-align:center;color:#555">列印日期：${today}　核准件數：${approved.length}</p>
+    <table style="width:100%;border-collapse:collapse" border="1" cellpadding="6">
+    <thead><tr style="background:#1f6b54;color:#fff"><th>編號</th><th>姓名</th><th>期間</th><th>應發</th><th>扣款</th><th>實發</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700">撥款總額</td><td style="text-align:right;font-weight:800">${NT(total)}</td></tr></tfoot></table>
+    <div style="margin-top:50px;display:flex;justify-content:space-around;color:#333">
+      <div>會計：____________</div><div>主辦會計：____________</div><div>園長：____________</div></div></div>`;
+  if(!approved.length){ alert('尚無已核准的結算單，無法列印核銷清冊。'); return; }
+  window.print();
+});
+
+// ================= 撥款 =================
+async function loadPayoutPreview(){
+  try{
+    const r = await api(`/api/payout/preview?periodStart=${$('#po-start').value}&periodEnd=${$('#po-end').value}`);
+    $('#po-rows').innerHTML = r.rows.length? r.rows.map(x=>`<tr><td>${x.name}</td><td>${x.employeeId||'—'}</td><td>${x.bankCode}</td><td>${x.bankAccount||'—'}</td><td class="r">${NT(x.amount)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">此期間無已核准撥款</td></tr>';
+    $('#po-foot').innerHTML = r.count? `<tr><td colspan="4" class="r"><b>合計 ${r.count} 筆</b></td><td class="r"><b>${NT(r.total)}</b></td></tr>`:'';
+    msg('#po-msg', r.count?`共 ${r.count} 筆，總額 ${NT(r.total)}`:'此期間無已核准撥款', r.count>0);
+  }catch(e){ msg('#po-msg',e.message,false); }
+}
+$('#po-prev').addEventListener('click',loadPayoutPreview);
+$('#po-dl').addEventListener('click', ()=>{
+  window.location = `/api/payout/bankfile?periodStart=${$('#po-start').value}&periodEnd=${$('#po-end').value}`;
+});
+
+// ---- 各分頁載入器 ----
+const loaders = { staff:loadStaff, schedule:loadSchedule, attend:loadAttend, settle:loadStaff, approve:loadClaims, payout:()=>{} };
+loadStaff();
+</script>
+</body>
+</html>
