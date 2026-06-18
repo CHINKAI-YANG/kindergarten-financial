@@ -2,38 +2,42 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>員工打卡端｜益民幼兒園 FHIR 智慧行政</title>
 <style>
-  :root{ --green:#1f6b54; --green-d:#1f3a33; --bg:#eef3f0; --line:#d4e0da; --warn:#c0392b; --ok:#1f8b5f; }
+  :root{ --green:#1f6b54; --green-d:#1f3a33; --bg:#eef3f0; --line:#d4e0da; --warn:#c0392b; --ok:#1f8b5f; --amber:#b8842b; }
   *{ box-sizing:border-box; }
   body{ margin:0; font-family:system-ui,"Microsoft JhengHei","PingFang TC",sans-serif; background:var(--bg); color:var(--green-d); }
-  header{ background:var(--green); color:#fff; padding:16px 22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
-  header h1{ font-size:20px; margin:0; }
-  header .clock{ font-variant-numeric:tabular-nums; font-size:30px; font-weight:700; letter-spacing:1px; }
+  header{ background:var(--green); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  header h1{ font-size:19px; margin:0; }
+  header .clock{ font-variant-numeric:tabular-nums; font-size:28px; font-weight:700; letter-spacing:1px; }
   .nav a{ color:#cfe7dd; text-decoration:none; font-size:14px; margin-left:14px; }
-  main{ max-width:780px; margin:0 auto; padding:22px 16px 60px; }
-  .card{ background:#fff; border-radius:16px; box-shadow:0 6px 24px rgba(31,107,84,.10); padding:22px; margin-bottom:18px; }
+  main{ max-width:560px; margin:0 auto; padding:16px 14px 60px; }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 6px 24px rgba(31,107,84,.10); padding:20px; margin-bottom:16px; }
   label{ display:block; font-weight:700; margin:0 0 8px; font-size:15px; }
   select{ width:100%; padding:16px; font-size:20px; border:2px solid var(--line); border-radius:12px; background:#fff; }
-  .types{ display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
-  .types button{ flex:1; min-width:120px; padding:14px; font-size:17px; border:2px solid var(--line); border-radius:12px; background:#fff; cursor:pointer; font-weight:700; color:var(--green-d); }
+  .types{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .types button{ flex:1; min-width:96px; padding:14px 6px; font-size:16px; border:2px solid var(--line); border-radius:12px; background:#fff; cursor:pointer; font-weight:700; color:var(--green-d); }
   .types button.sel{ background:var(--green); color:#fff; border-color:var(--green); }
-  .actions{ display:flex; gap:14px; margin-top:18px; }
-  .actions button{ flex:1; padding:26px; font-size:24px; font-weight:800; border:none; border-radius:16px; cursor:pointer; color:#fff; }
-  .btn-in{ background:var(--green); }
-  .btn-out{ background:#b8842b; }
+  .actions{ display:flex; gap:12px; margin-top:16px; }
+  .actions button{ flex:1; padding:24px 8px; font-size:23px; font-weight:800; border:none; border-radius:16px; cursor:pointer; color:#fff; }
+  .btn-in{ background:var(--green); } .btn-out{ background:#b8842b; }
   .actions button:active{ transform:translateY(1px); }
-  #msg{ margin-top:16px; padding:14px 16px; border-radius:12px; font-size:17px; display:none; }
+  .banner{ padding:12px 14px; border-radius:12px; font-size:15px; margin-bottom:12px; line-height:1.5; }
+  .banner.warn{ background:#fff3e6; color:#9a5b12; border:1px solid #f3d09a; }
+  .banner.bad{ background:#fbeae8; color:var(--warn); border:1px solid #f1c9c3; }
+  .banner.good{ background:#e6f5ee; color:var(--ok); border:1px solid #b7e3cd; }
+  .banner .mini{ background:var(--amber); color:#fff; border:none; border-radius:8px; padding:7px 12px; font-weight:700; font-size:14px; margin-top:8px; cursor:pointer; }
+  #msg{ margin-top:14px; padding:14px 16px; border-radius:12px; font-size:16px; display:none; }
   #msg.ok{ display:block; background:#e6f5ee; color:var(--ok); border:1px solid #b7e3cd; }
   #msg.err{ display:block; background:#fbeae8; color:var(--warn); border:1px solid #f1c9c3; }
   table{ width:100%; border-collapse:collapse; font-size:14px; }
-  th,td{ padding:10px 8px; text-align:center; border-bottom:1px solid var(--line); }
+  th,td{ padding:9px 6px; text-align:center; border-bottom:1px solid var(--line); }
   th{ color:#5a6b63; font-weight:700; }
   .tag{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; }
-  .tag.in{ background:#fdeccd; color:#9a6512; } .tag.fin{ background:#e6f5ee; color:var(--ok); }
+  .tag.in{ background:#fdeccd; color:#9a6512; } .tag.fin{ background:#e6f5ee; color:var(--ok); } .tag.bad{ background:#fbeae8; color:var(--warn); }
   .muted{ color:#7c8b84; font-size:13px; }
-  h2{ font-size:17px; margin:0 0 12px; }
+  h2{ font-size:16px; margin:0 0 12px; }
   footer{ text-align:center; color:#8aa39a; font-size:12px; padding:10px; }
 </style>
 </head>
@@ -49,7 +53,10 @@
     <label for="who">請選擇姓名（現場點名簽到）</label>
     <select id="who"><option value="">載入中…</option></select>
 
-    <label style="margin-top:18px">工作類別</label>
+    <div id="deviceBanner"></div>
+    <div id="remindBanner"></div>
+
+    <label style="margin-top:16px">工作類別</label>
     <div class="types" id="types">
       <button data-t="regular" class="sel">正常班</button>
       <button data-t="aftercare">課後延護</button>
@@ -77,13 +84,16 @@
 let workType = 'regular';
 const $ = (s) => document.querySelector(s);
 
-// 即時時鐘
-setInterval(() => {
-  const n = new Date();
-  $('#liveClock').textContent = n.toLocaleTimeString('zh-TW', { hour12:false });
-}, 1000);
+// 本裝置識別碼（綁定手機用）：首次造訪即產生並存於本機
+function deviceId(){
+  let id = localStorage.getItem('mlkg_device');
+  if(!id){ id = (crypto.randomUUID ? crypto.randomUUID() : 'dev-'+Date.now()+'-'+Math.random().toString(16).slice(2)); localStorage.setItem('mlkg_device', id); }
+  return id;
+}
+const DEV = deviceId();
 
-// 工作類別切換
+setInterval(() => { $('#liveClock').textContent = new Date().toLocaleTimeString('zh-TW',{hour12:false}); }, 1000);
+
 $('#types').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b) return;
   document.querySelectorAll('#types button').forEach(x => x.classList.remove('sel'));
@@ -91,61 +101,94 @@ $('#types').addEventListener('click', (e) => {
 });
 
 function showMsg(text, ok){ const m=$('#msg'); m.textContent=text; m.className = ok?'ok':'err'; }
-
 async function api(url, opts){
   const r = await fetch(url, opts);
   const data = await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(data.error || ('錯誤 '+r.status));
   return data;
 }
+const fmtT = (iso)=> iso ? new Date(iso).toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'}) : '—';
+const fmtD = (iso)=> iso ? new Date(iso).toLocaleDateString('zh-TW') : '—';
 
 async function loadPractitioners(){
   try{
     const list = await api('/api/clock/practitioners');
-    const sel = $('#who');
-    sel.innerHTML = '<option value="">— 請選擇 —</option>' +
-      list.map(p => `<option value="${p.id}">${p.name}（${p.employeeId||'—'}）</option>`).join('');
+    $('#who').innerHTML = '<option value="">— 請選擇 —</option>' +
+      list.map(p => `<option value="${p.id}">${p.name}（${p.employeeId||'—'}）${p.deviceBound?'':' ⚠未綁定'}</option>`).join('');
   }catch(e){ $('#who').innerHTML = '<option value="">'+e.message+'</option>'; }
 }
 
-const fmtT = (iso)=> iso ? new Date(iso).toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit'}) : '—';
-const fmtD = (iso)=> iso ? new Date(iso).toLocaleDateString('zh-TW') : '—';
+// 裝置綁定狀態提示
+async function loadDeviceStatus(){
+  const id=$('#who').value; const box=$('#deviceBanner'); box.innerHTML='';
+  if(!id) return;
+  try{
+    const s = await api(`/api/clock/device-status?practitionerId=${id}&deviceId=${DEV}`);
+    if(s.state==='none') box.innerHTML = `<div class="banner warn">📱 本人尚未綁定手機，<b>第一次簽到時將自動綁定此手機</b>，之後僅能用這支手機打卡。</div>`;
+    else if(s.state==='this') box.innerHTML = `<div class="banner good">📱 已綁定此手機，可正常打卡。</div>`;
+    else box.innerHTML = `<div class="banner bad">🚫 此手機<b>不是</b>本人綁定的裝置，無法打卡。請改用已綁定的手機，或請會計室重設綁定。</div>`;
+  }catch(e){ /* 忽略狀態查詢錯誤 */ }
+}
+
+// 跨日未簽退提醒（隔天立即處理）
+async function loadReminders(){
+  const id=$('#who').value; const box=$('#remindBanner'); box.innerHTML='';
+  if(!id) return;
+  try{
+    const list = await api('/api/clock/reminders?practitionerId='+id);
+    if(!list.length) return;
+    box.innerHTML = `<div class="banner bad">⚠️ <b>提醒：你有未簽退的打卡需立即處理</b>` +
+      list.map(e=>`<div style="margin-top:6px">・${fmtD(e.start)} ${fmtT(e.start)} 簽到（${e.workTypeDisplay}）尚未簽退
+      <button class="mini" data-end-id="${e.id}">補登簽退</button></div>`).join('') + `</div>`;
+    box.querySelectorAll('button[data-end-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=>fixClockOut());
+    });
+  }catch(e){ /* 忽略 */ }
+}
 
 async function loadMine(){
-  const id = $('#who').value;
-  const tb = $('#rows');
+  const id = $('#who').value; const tb = $('#rows');
   if(!id){ tb.innerHTML = '<tr><td colspan="6" class="muted">請先選擇姓名</td></tr>'; return; }
   try{
     const list = await api('/api/clock/my-attendance?practitionerId='+id);
-    if(!list.length){ tb.innerHTML = '<tr><td colspan="6" class="muted">尚無打卡紀錄</td></tr>'; return; }
-    tb.innerHTML = list.map(e => `<tr>
+    tb.innerHTML = list.length ? list.map(e => `<tr>
       <td>${fmtD(e.start)}</td><td>${e.workTypeDisplay}</td>
       <td>${fmtT(e.start)}</td><td>${fmtT(e.end)}</td>
       <td>${e.end? e.hours.toFixed(2) : '—'}</td>
-      <td>${e.anomaly? '<span class="tag in">未簽退</span>' : '<span class="tag fin">已完成</span>'}</td>
-    </tr>`).join('');
+      <td>${e.stale?'<span class="tag bad">跨日未簽退</span>':(e.anomaly? '<span class="tag in">未簽退</span>' : '<span class="tag fin">已完成</span>')}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="muted">尚無打卡紀錄</td></tr>';
   }catch(e){ tb.innerHTML = '<tr><td colspan="6" class="err">'+e.message+'</td></tr>'; }
 }
 
-$('#who').addEventListener('change', loadMine);
+function refreshSelected(){ loadMine(); loadDeviceStatus(); loadReminders(); }
+$('#who').addEventListener('change', refreshSelected);
 
 $('#btnIn').addEventListener('click', async () => {
   const id = $('#who').value; if(!id) return showMsg('請先選擇姓名', false);
   try{
-    const e = await api('/api/clock/clock-in', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ practitionerId:id, workType }) });
-    showMsg(`✅ 簽到成功（${e.workTypeDisplay}）　時間 ${fmtT(e.start)}`, true);
-    loadMine();
+    const e = await api('/api/clock/clock-in', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ practitionerId:id, workType, deviceId:DEV }) });
+    showMsg(`✅ 簽到成功（${e.workTypeDisplay}）　時間 ${fmtT(e.start)}` + (e.deviceJustBound?'　📱已綁定此手機':''), true);
+    refreshSelected();
   }catch(err){ showMsg('⚠️ '+err.message, false); }
 });
 
-$('#btnOut').addEventListener('click', async () => {
+// 一般簽退（用現在時間）
+$('#btnOut').addEventListener('click', () => fixClockOut(true));
+
+// 簽退 / 補登簽退：normal=true 用現在時間；否則提示輸入實際離開時間（給跨日未簽退用）
+async function fixClockOut(normal){
   const id = $('#who').value; if(!id) return showMsg('請先選擇姓名', false);
+  let end;
+  if(!normal){
+    const t = prompt('請輸入實際離開時間（格式 YYYY-MM-DDTHH:mm，例 2026-06-17T18:30）：');
+    if(t===null) return; if(t) end = new Date(t).toISOString();
+  }
   try{
-    const e = await api('/api/clock/clock-out', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ practitionerId:id }) });
+    const e = await api('/api/clock/clock-out', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ practitionerId:id, deviceId:DEV, end }) });
     showMsg(`✅ 簽退成功　工時 ${e.hours.toFixed(2)} 小時（${fmtT(e.start)} → ${fmtT(e.end)}）`, true);
-    loadMine();
+    refreshSelected();
   }catch(err){ showMsg('⚠️ '+err.message, false); }
-});
+}
 
 fetch('/api/config').then(r=>r.json()).then(c=>{ $('#foot').textContent = 'FHIR 伺服器：'+c.fhirBaseUrl+'　｜　租戶：'+c.tenantTag; }).catch(()=>{});
 loadPractitioners();

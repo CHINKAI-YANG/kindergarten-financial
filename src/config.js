@@ -15,10 +15,24 @@ export const config = {
   // 合作金庫銀行代碼（媒體轉帳檔用）
   defaultBankCode: process.env.BANK_CODE || '006',
 
+  // 勞健保「員工自付」有效費率（以投保薪資為基數自動計算代扣金額）。
+  // 為簡化版預設值，實務費率請於此調整：
+  //   勞保自付 ≈ 2.4%（普通事故 11%×20% + 就保 1%×20%）
+  //   健保自付 ≈ 1.55%（一般費率 5.17%×30%，不含眷屬）
+  laborInsuranceRate: Number(process.env.LABOR_INS_RATE || 0.024),
+  healthInsuranceRate: Number(process.env.HEALTH_INS_RATE || 0.0155),
+
   // 租戶標記：HAPI 為公眾共用伺服器，所有資源都會貼上這個 meta.tag，
   // 之後搜尋一律以 _tag 過濾，確保只讀寫「本園」的資料。
   // 若多人共用同一公開伺服器，請把 TENANT_TAG 改成獨一無二的字串以免互相干擾。
   tenantTag: process.env.TENANT_TAG || 'morninglight-kg-demo',
+};
+
+// 常見銀行代碼對照（帳號清楚顯示用）
+export const BANKS = {
+  '004': '臺灣銀行', '005': '土地銀行', '006': '合作金庫', '007': '第一銀行',
+  '008': '華南銀行', '009': '彰化銀行', '011': '上海商銀', '012': '台北富邦',
+  '013': '國泰世華', '017': '兆豐銀行', '700': '中華郵政', '822': '中國信託',
 };
 
 // FHIR 命名系統（identifier / coding / extension 的 system URL）
@@ -27,18 +41,22 @@ export const SYSTEMS = {
   employeeId: 'http://morninglight.kindergarten/fhir/employee-id',
   workType: 'http://morninglight.kindergarten/fhir/work-type',
   claimId: 'http://morninglight.kindergarten/fhir/settlement-id',
+  serial: 'http://morninglight.kindergarten/fhir/serial-no', // 收入流水號
 };
 
-// Practitioner 上承載薪資/保費/銀行資訊的自訂 extension
+// Practitioner 上承載薪資/保費/銀行/裝置資訊的自訂 extension
 export const EXT = {
   baseSalary: 'http://morninglight.kindergarten/fhir/ext/base-salary',
   hourlyRate: 'http://morninglight.kindergarten/fhir/ext/hourly-rate',
   afterCareRate: 'http://morninglight.kindergarten/fhir/ext/aftercare-rate',
   overtimeRate: 'http://morninglight.kindergarten/fhir/ext/overtime-rate',
-  laborInsurance: 'http://morninglight.kindergarten/fhir/ext/labor-insurance',
-  healthInsurance: 'http://morninglight.kindergarten/fhir/ext/health-insurance',
+  insuredSalary: 'http://morninglight.kindergarten/fhir/ext/insured-salary', // 投保薪資
+  autoInsurance: 'http://morninglight.kindergarten/fhir/ext/auto-insurance', // 是否自動計算勞健保
+  laborInsurance: 'http://morninglight.kindergarten/fhir/ext/labor-insurance', // 手動覆寫金額
+  healthInsurance: 'http://morninglight.kindergarten/fhir/ext/health-insurance', // 手動覆寫金額
   bankCode: 'http://morninglight.kindergarten/fhir/ext/bank-code',
   bankAccount: 'http://morninglight.kindergarten/fhir/ext/bank-account',
+  deviceToken: 'http://morninglight.kindergarten/fhir/ext/device-token', // 打卡綁定之裝置
   payroll: 'http://morninglight.kindergarten/fhir/ext/payroll-detail',
 };
 

@@ -42,7 +42,9 @@ async function main() {
   // ---- 情境 A：月薪制導師 ----
   const A = await fhir.create('Practitioner', practitionerToFhir({
     employeeId: 'T001', name: '王曉明', baseSalary: 42000, hourlyRate: 0,
-    afterCareRate: 280, overtimeRate: 180, laborInsurance: 930, healthInsurance: 1510,
+    afterCareRate: 280, overtimeRate: 180,
+    // 勞健保採手動覆寫，沿用計畫書數字（930／1,510），實發剛好 43,640
+    insuredSalary: 42000, autoInsurance: false, laborInsurance: 930, healthInsurance: 1510,
     bankCode: '006', bankAccount: '1234567890123',
   }));
   console.log('建立 Practitioner A 王曉明：', A.id);
@@ -74,7 +76,8 @@ async function main() {
   // ---- 情境 B：純時薪工讀 ----
   const B = await fhir.create('Practitioner', practitionerToFhir({
     employeeId: 'P001', name: '陳小美', baseSalary: 0, hourlyRate: 190,
-    laborInsurance: 0, healthInsurance: 0, bankCode: '006', bankAccount: '9876543210987',
+    // 純時薪：本薪 0 → 自動封鎖勞健保代扣（autoInsurance 與投保薪資皆不影響時薪結算）
+    insuredSalary: 0, autoInsurance: true, bankCode: '006', bankAccount: '9876543210987',
   }));
   console.log('建立 Practitioner B 陳小美：', B.id);
   const refB = `Practitioner/${B.id}`;

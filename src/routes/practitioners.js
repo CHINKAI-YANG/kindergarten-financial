@@ -4,8 +4,11 @@
 import { Router } from 'express';
 import { fhir } from '../fhirClient.js';
 import { practitionerToFhir, practitionerFromFhir } from '../mappers.js';
+import { EXT } from '../config.js';
 
 const router = Router();
+
+const getDeviceToken = (raw) => (raw.extension || []).find((e) => e.url === EXT.deviceToken)?.valueString || '';
 
 // 列出所有員工（含薪資參數，僅供會計室）
 router.get('/', async (req, res, next) => {
@@ -37,10 +40,24 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// 更新員工
+// 更新員工（保留既有的裝置綁定，避免編輯資料時意外解除綁定）
 router.put('/:id', async (req, res, next) => {
   try {
-    const updated = await fhir.update('Practitioner', req.params.id, practitionerToFhir({ ...req.body, id: req.params.id }));
+    const existing = await fhir.read('Practitioner', req.params.id);
+    const deviceToken = req.body.deviceToken ?? getDeviceToken(existing);
+    const updated = await fhir.update('Practitioner', req.params.id, practitionerToFhir({ ...req.body, id: req.params.id, deviceToken }));
+    res.json(practitionerFromFhir(updated));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 解除裝置綁定（會計室重設，員工下次打卡可重新綁定新手機）
+router.post('/:id/reset-device', async (req, res, next) => {
+  try {
+    const raw = await fhir.read('Practitioner', req.params.id);
+    raw.extension = (raw.extension || []).filter((e) => e.url !== EXT.deviceToken);
+    const updated = await fhir.update('Practitioner', req.params.id, raw);
     res.json(practitionerFromFhir(updated));
   } catch (e) {
     next(e);

@@ -20,9 +20,15 @@ export function createApp() {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
 
-  // 提供前端設定（FHIR 伺服器位址、租戶標記）給畫面顯示
+  // 提供前端設定（FHIR 伺服器位址、租戶標記、勞健保費率）給畫面顯示與即時試算
   app.get('/api/config', (req, res) => {
-    res.json({ fhirBaseUrl: config.fhirBaseUrl, tenantTag: config.tenantTag, currency: config.currency });
+    res.json({
+      fhirBaseUrl: config.fhirBaseUrl,
+      tenantTag: config.tenantTag,
+      currency: config.currency,
+      laborInsuranceRate: config.laborInsuranceRate,
+      healthInsuranceRate: config.healthInsuranceRate,
+    });
   });
 
   // 連線健檢：實際打 FHIR 伺服器的 metadata

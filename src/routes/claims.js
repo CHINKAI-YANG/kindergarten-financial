@@ -1,5 +1,5 @@
 // 會計結算與發薪 API（/api/claims/*）— 會計室核銷端
-//   Claim         → 月底結算（工資必須綁定出勤證據，否則阻斷）
+//   Claim         → 月底結算（工資必須綁定出勤證據，否則阻斷；每筆產生收入流水號）
 //   ClaimResponse → 園長簽核發薪（核准後可生成銀行媒體檔）
 
 import { Router } from 'express';
@@ -23,15 +23,29 @@ function parsePayroll(resource) {
   try { return JSON.parse(e.valueString); } catch { return null; }
 }
 
-function buildClaim(p, payroll, startDate, endDate, encounterRefs) {
+// 產生收入流水號：S + 期間年月 + 當月四碼序號（例 S202606-0001）
+function nextSerial(periodStart, existingClaims) {
+  const ym = String(periodStart).slice(0, 7).replace('-', '');
+  const prefix = `S${ym}-`;
+  const used = existingClaims
+    .map((c) => c.identifier?.find((i) => i.system === SYSTEMS.serial)?.value)
+    .filter((v) => v && v.startsWith(prefix));
+  return prefix + String(used.length + 1).padStart(4, '0');
+}
+
+function buildClaim(p, payroll, startDate, endDate, encounterRefs, serial) {
   const detail = {
-    practitioner: { id: p.id, name: p.name, employeeId: p.employeeId, salaryMode: p.salaryMode, bankCode: p.bankCode, bankAccount: p.bankAccount },
+    serial,
+    practitioner: { id: p.id, name: p.name, employeeId: p.employeeId, salaryMode: p.salaryMode, bankCode: p.bankCode, bankAccount: p.bankAccount, bankLabel: p.bankLabel },
     period: { start: startDate, end: endDate },
     ...payroll,
   };
   return {
     resourceType: 'Claim',
-    identifier: [{ system: SYSTEMS.claimId, value: `${p.employeeId}-${startDate}` }],
+    identifier: [
+      { system: SYSTEMS.claimId, value: `${p.employeeId}-${startDate}` },
+      { system: SYSTEMS.serial, value: serial },
+    ],
     status: 'active',
     type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/claim-type', code: 'professional' }] },
     use: 'claim',
@@ -61,6 +75,7 @@ function buildClaimResponse(claim, detail) {
   const today = new Date().toISOString().slice(0, 10);
   return {
     resourceType: 'ClaimResponse',
+    identifier: detail.serial ? [{ system: SYSTEMS.serial, value: detail.serial }] : undefined,
     status: 'active',
     type: claim.type,
     use: 'claim',
@@ -70,7 +85,7 @@ function buildClaimResponse(claim, detail) {
     requestor: { display: '晨光幼兒園 會計室' },
     request: { reference: `Claim/${claim.id}` },
     outcome: 'complete',
-    disposition: '核准，准予撥款',
+    disposition: `核准，准予撥款（流水號 ${detail.serial || '—'}）`,
     payment: {
       type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/ex-paymenttype', code: 'complete' }] },
       amount: { value: detail.net, currency: config.currency },
@@ -84,7 +99,7 @@ function buildClaimResponse(claim, detail) {
   };
 }
 
-// 結算：建立 Claim（含缺簽退阻斷）
+// 結算：建立 Claim（含缺簽退阻斷 + 收入流水號）
 router.post('/settle', async (req, res, next) => {
   try {
     const { practitionerId, periodStart, periodEnd } = req.body;
@@ -112,7 +127,11 @@ router.post('/settle', async (req, res, next) => {
     const payroll = computePayroll(p, finished);
     const encounterRefs = finished.map((e) => `Encounter/${e.id}`);
 
-    const claim = await fhir.create('Claim', buildClaim(p, payroll, periodStart, periodEnd, encounterRefs));
+    // 取現有 Claim 以產生流水號
+    const existingClaims = await fhir.searchAll('Claim', { _count: 300 });
+    const serial = nextSerial(periodStart, existingClaims);
+
+    const claim = await fhir.create('Claim', buildClaim(p, payroll, periodStart, periodEnd, encounterRefs, serial));
     res.status(201).json({ claim, detail: parsePayroll(claim) });
   } catch (e) {
     next(e);

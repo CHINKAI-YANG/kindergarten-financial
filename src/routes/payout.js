@@ -31,9 +31,11 @@ router.get('/preview', async (req, res, next) => {
       .filter(Boolean)
       .filter((d) => inPeriod(d, periodStart, periodEnd))
       .map((d) => ({
+        serial: d.serial,
         name: d.practitioner?.name,
         employeeId: d.practitioner?.employeeId,
         bankCode: d.practitioner?.bankCode,
+        bankLabel: d.practitioner?.bankLabel,
         bankAccount: d.practitioner?.bankAccount,
         amount: d.net,
       }));
@@ -53,6 +55,7 @@ router.get('/bankfile', async (req, res, next) => {
       .filter(Boolean)
       .filter((d) => inPeriod(d, periodStart, periodEnd))
       .map((d) => ({
+        serial: d.serial,
         bankCode: d.practitioner?.bankCode,
         bankAccount: d.practitioner?.bankAccount,
         amount: d.net,
