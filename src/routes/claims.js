@@ -53,7 +53,7 @@ function buildClaim(p, payroll, startDate, endDate, encounterRefs, serial) {
     patient: { reference: `Practitioner/${p.id}`, display: p.name },
     billablePeriod: { start: startDate, end: endDate },
     created: new Date().toISOString(),
-    provider: { display: '晨光幼兒園 會計室' },
+    provider: { display: '益民幼兒園 會計室' },
     priority: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/processpriority', code: 'normal' }] },
     // 數位證據鏈：請款明確連結到實際出勤（Encounter）
     supportingInfo: encounterRefs.map((ref, i) => ({
@@ -81,8 +81,8 @@ function buildClaimResponse(claim, detail) {
     use: 'claim',
     patient: claim.patient,
     created: new Date().toISOString(),
-    insurer: { display: '晨光幼兒園 園長室' },
-    requestor: { display: '晨光幼兒園 會計室' },
+    insurer: { display: '益民幼兒園 園長室' },
+    requestor: { display: '益民幼兒園 會計室' },
     request: { reference: `Claim/${claim.id}` },
     outcome: 'complete',
     disposition: `核准，准予撥款（流水號 ${detail.serial || '—'}）`,

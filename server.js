@@ -1,4 +1,4 @@
-// 晨光幼兒園 FHIR 智慧行政系統 — Node.js 後端
+// 益民幼兒園 FHIR 智慧行政系統 — Node.js 後端
 // 將「排班—打卡—結算—簽核—撥款」全流程操作轉為 FHIR 資源，上傳至 HAPI baseR4。
 
 import express from 'express';
@@ -56,13 +56,13 @@ export function createApp() {
   app.get('/', (req, res) => {
     res.type('html').send(`<!doctype html><html lang="zh-Hant"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>晨光幼兒園 FHIR 智慧行政</title>
+<title>益民幼兒園 FHIR 智慧行政</title>
 <style>body{font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#eef3f0;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
 .box{background:#fff;padding:40px;border-radius:16px;box-shadow:0 10px 40px rgba(31,107,84,.15);text-align:center;max-width:520px}
 h1{color:#1f6b54;margin:0 0 6px}p{color:#5a6b63}
 a{display:block;margin:14px 0;padding:18px;border-radius:12px;text-decoration:none;font-size:18px;font-weight:700}
 .clock{background:#1f6b54;color:#fff}.admin{background:#e8f0ec;color:#1f3a33}</style>
-<div class="box"><h1>晨光幼兒園</h1><p>FHIR 智慧行政・出勤打卡與薪資核銷一體化系統</p>
+<div class="box"><h1>益民幼兒園</h1><p>FHIR 智慧行政・出勤打卡與薪資核銷一體化系統</p>
 <a class="clock" href="/clock.html">🕒 員工打卡端</a>
 <a class="admin" href="/admin.html">📊 會計室核銷端</a>
 <p style="font-size:13px">FHIR 伺服器：${config.fhirBaseUrl}</p></div></html>`);
@@ -81,7 +81,7 @@ a{display:block;margin:14px 0;padding:18px;border-radius:12px;text-decoration:no
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const app = createApp();
   app.listen(config.port, () => {
-    console.log(`\n  晨光幼兒園 FHIR 智慧行政系統`);
+    console.log(`\n  益民幼兒園 FHIR 智慧行政系統`);
     console.log(`  ───────────────────────────────`);
     console.log(`  本機服務： http://localhost:${config.port}`);
     console.log(`  員工打卡端：http://localhost:${config.port}/clock.html`);

@@ -1,7 +1,7 @@
 {
   "name": "kindergarten-fhir-admin",
   "version": "1.0.0",
-  "description": "晨光幼兒園 FHIR 智慧行政：出勤打卡與薪資核銷一體化系統（員工打卡端 + 會計室核銷端，後端 Node.js，資料上傳 HAPI FHIR baseR4）",
+  "description": "益民幼兒園 FHIR 智慧行政：出勤打卡與薪資核銷一體化系統（員工打卡端 + 會計室核銷端，後端 Node.js，資料上傳 HAPI FHIR baseR4）",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -17,7 +17,7 @@
     "payroll",
     "attendance"
   ],
-  "author": "晨光幼兒園 行政暨會計室",
+  "author": "益民幼兒園 行政暨會計室",
   "license": "MIT",
   "engines": {
     "node": ">=18"

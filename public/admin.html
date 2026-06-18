@@ -451,7 +451,7 @@ $('#ap-print').addEventListener('click', ()=>{
   const rows=approved.map(c=>{ const d=c.detail; return `<tr><td>${d.serial||''}</td><td>${d.practitioner.employeeId}</td><td>${d.practitioner.name}</td><td>${d.period.start}~${d.period.end}</td><td>${d.practitioner.bankLabel||d.practitioner.bankCode} ${d.practitioner.bankAccount}</td><td style="text-align:right">${NT(d.gross)}</td><td style="text-align:right">-${NT(d.deductions)}</td><td style="text-align:right"><b>${NT(d.net)}</b></td></tr>`; }).join('');
   const total=approved.reduce((s,c)=>s+(c.detail?.net||0),0);
   $('#printArea').innerHTML = `<div style="padding:24px;font-family:'Microsoft JhengHei',sans-serif">
-    <h2 style="text-align:center">晨光幼兒園　薪資核銷清冊</h2>
+    <h2 style="text-align:center">益民幼兒園　薪資核銷清冊</h2>
     <p style="text-align:center;color:#555">列印日期：${today}　核准件數：${approved.length}</p>
     <table style="width:100%;border-collapse:collapse" border="1" cellpadding="6">
     <thead><tr style="background:#1f6b54;color:#fff"><th>流水號</th><th>編號</th><th>姓名</th><th>期間</th><th>銀行帳號</th><th>應發</th><th>扣款</th><th>實發</th></tr></thead>
