@@ -2,6 +2,10 @@
 //   勞健保自動計算＋手動覆寫、收入流水號、跨日未簽退提醒、打卡綁定裝置、帳號清楚。
 // 執行：npm test
 import { startMockFhir } from './mock-fhir-server.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const mock = await startMockFhir(0);
 process.env.FHIR_BASE_URL = `http://127.0.0.1:${mock.port}`;
@@ -33,6 +37,15 @@ const addEnc = (ref, name, code, start, end) =>
 const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
 
 try {
+  console.log('\n[前端語法檢查] 兩個 HTML 的 inline JavaScript');
+  for (const f of ['public/admin.html', 'public/clock.html']) {
+    const html = readFileSync(path.join(ROOT, f), 'utf8');
+    const body = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((x) => x[1]).join('\n');
+    let synOk = true;
+    try { new Function(body); } catch { synOk = false; } // 只編譯不執行，偵測語法錯誤
+    ok(synOk, `${f} 的 JavaScript 語法正確`);
+  }
+
   console.log('\n[健檢]');
   ok((await J('GET', '/api/health')).data.ok === true, '可連線 mock FHIR 伺服器');
 

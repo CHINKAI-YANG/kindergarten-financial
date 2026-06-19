@@ -438,7 +438,7 @@ async function loadClaims(){
       <td>${d.mode==='monthly'?'<span class="tag month">月薪</span>':'<span class="tag hour">時薪</span>'}</td>
       <td class="r">${NT(d.gross)}</td><td class="r">-${NT(d.deductions)}</td><td class="r"><b>${NT(d.net)}</b></td>
       <td class="c">${c.approved?'<span class="tag ok">已核准</span>':'<span class="tag pend">待核准</span>'}</td>
-      <td class="c no-print">${c.approved?'':`<button class="btn sm" onclick="approve('${c.id}')">核准</button>`}</td></tr>`; }).join())
+      <td class="c no-print">${c.approved?'':`<button class="btn sm" onclick="approve('${c.id}')">核准</button>`}</td></tr>`; }).join('')
       : '<tr><td colspan="9" class="muted">尚無結算單</td></tr>';
   }catch(e){ $('#cl-rows').innerHTML='<tr><td colspan="9" class="err">'+e.message+'</td></tr>'; }
 }
