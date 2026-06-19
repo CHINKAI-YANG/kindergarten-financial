@@ -19,6 +19,13 @@ export function startMockFhir(port = 0) {
   // create
   app.post('/:rt', (req, res) => {
     const rt = req.params.rt;
+    // 比照 HAPI 驗證 Claim/ClaimResponse.patient 的參照型別（HAPI-0931）
+    if ((rt === 'Claim' || rt === 'ClaimResponse') && req.body?.patient?.reference && !req.body.patient.reference.startsWith('Patient/')) {
+      return res.status(422).json({
+        resourceType: 'OperationOutcome',
+        issue: [{ severity: 'error', code: 'processing', diagnostics: `HAPI-0931: Invalid reference found at path '${rt}.patient'.` }],
+      });
+    }
     const id = String(++counter);
     const resource = { ...req.body, resourceType: rt, id, meta: { ...(req.body.meta || {}), versionId: '1', lastUpdated: new Date().toISOString() } };
     col(rt).set(id, resource);
@@ -53,6 +60,10 @@ export function startMockFhir(port = 0) {
       items = items.filter((r) => (r.meta?.tag || []).some((t) => t.system === system && t.code === code));
     }
     if (q.status) items = items.filter((r) => r.status === q.status);
+    if (q.identifier) {
+      const [sys, val] = String(q.identifier).split('|');
+      items = items.filter((r) => (r.identifier || []).some((id) => (!sys || id.system === sys) && (!val || id.value === val)));
+    }
     if (q.practitioner || q.participant) {
       const ref = q.practitioner || q.participant;
       items = items.filter((r) => (r.participant || []).some((p) => p.individual?.reference === ref));

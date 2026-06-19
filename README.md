@@ -148,7 +148,6 @@ npm test
 
 ## 模型化備註
 
-- 計畫書將「薪資請款/核准」對應到 FHIR 的 `Claim`／`ClaimResponse`。
-  本系統以 `Practitioner` 代表受款員工，故 `Claim.patient`／`ClaimResponse.patient` 指向該 `Practitioner`（為符合計畫書「以 Practitioner 為人事主體」之設計選擇）。
+- 計畫書將「薪資請款/核准」對應到 FHIR 的 `Claim`／`ClaimResponse`。FHIR 規定 `Claim.patient`／`ClaimResponse.patient` 只能指向 `Patient`，故本系統為每位員工建立一個對應的「受款人 `Patient`」（以員工編號 identifier 連結、可重複使用），`Practitioner` 則維持為人事主體。結算時會自動建立或重用該 Patient。
 - 薪資/保費/銀行等非標準欄位以自訂 `extension` 承載於 `Practitioner`；
   完整薪資明細以 JSON 存於 `Claim`／`ClaimResponse` 的自訂 extension，方便前端原樣呈現與產生媒體檔。

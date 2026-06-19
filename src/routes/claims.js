@@ -33,7 +33,7 @@ function nextSerial(periodStart, existingClaims) {
   return prefix + String(used.length + 1).padStart(4, '0');
 }
 
-function buildClaim(p, payroll, startDate, endDate, encounterRefs, serial) {
+function buildClaim(p, payroll, startDate, endDate, encounterRefs, serial, patientRef) {
   const detail = {
     serial,
     practitioner: { id: p.id, name: p.name, employeeId: p.employeeId, salaryMode: p.salaryMode, bankCode: p.bankCode, bankAccount: p.bankAccount, bankLabel: p.bankLabel },
@@ -49,8 +49,9 @@ function buildClaim(p, payroll, startDate, endDate, encounterRefs, serial) {
     status: 'active',
     type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/claim-type', code: 'professional' }] },
     use: 'claim',
-    // 模型化選擇：本系統以 Practitioner 代表受款員工，故 patient 指向該 Practitioner。
-    patient: { reference: `Practitioner/${p.id}`, display: p.name },
+    // FHIR 規定 Claim.patient 只能指向 Patient，故指向員工對應的「受款人 Patient」
+    // （Practitioner 仍為人事主體，兩者以員工編號 identifier 連結）。
+    patient: { reference: patientRef, display: p.name },
     billablePeriod: { start: startDate, end: endDate },
     created: new Date().toISOString(),
     provider: { display: '益民幼兒園 會計室' },
@@ -99,6 +100,23 @@ function buildClaimResponse(claim, detail) {
   };
 }
 
+// 取得（或建立）員工對應的「受款人 Patient」。
+// FHIR 的 Claim.patient / ClaimResponse.patient 僅允許指向 Patient（真實 HAPI 會驗證型別），
+// 故為每位 Practitioner 建立一個以相同員工編號識別的 Patient，並可重複使用（去重）。
+async function ensurePayeePatient(p) {
+  if (p.employeeId) {
+    const found = await fhir.search('Patient', { identifier: `${SYSTEMS.employeeId}|${p.employeeId}` });
+    if (found.length) return `Patient/${found[0].id}`;
+  }
+  const created = await fhir.create('Patient', {
+    resourceType: 'Patient',
+    active: true,
+    identifier: p.employeeId ? [{ system: SYSTEMS.employeeId, value: p.employeeId }] : undefined,
+    name: [{ text: p.name, family: p.name }],
+  });
+  return `Patient/${created.id}`;
+}
+
 // 結算：建立 Claim（含缺簽退阻斷 + 收入流水號）
 router.post('/settle', async (req, res, next) => {
   try {
@@ -131,7 +149,10 @@ router.post('/settle', async (req, res, next) => {
     const existingClaims = await fhir.searchAll('Claim', { _count: 300 });
     const serial = nextSerial(periodStart, existingClaims);
 
-    const claim = await fhir.create('Claim', buildClaim(p, payroll, periodStart, periodEnd, encounterRefs, serial));
+    // 取得/建立受款人 Patient（Claim.patient 必須指向 Patient）
+    const payeePatientRef = await ensurePayeePatient(p);
+
+    const claim = await fhir.create('Claim', buildClaim(p, payroll, periodStart, periodEnd, encounterRefs, serial, payeePatientRef));
     res.status(201).json({ claim, detail: parsePayroll(claim) });
   } catch (e) {
     next(e);

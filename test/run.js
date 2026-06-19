@@ -49,8 +49,10 @@ try {
   await addEnc(`Practitioner/${aId}`, '王曉明', 'aftercare', '2026-06-02T08:00:00', '2026-06-02T20:00:00'); // 12h
   await addEnc(`Practitioner/${aId}`, '王曉明', 'overtime', '2026-06-03T18:00:00', '2026-06-03T22:00:00'); // 4h
   const sa = await J('POST', '/api/claims/settle', { practitionerId: aId, periodStart: '2026-06-01', periodEnd: '2026-06-30' });
+  ok(sa.status === 201, '結算成功（未被 HAPI-0931 參照型別擋下）');
   ok(sa.data.detail.net === 43640, `實發 = 43,640（實得 ${sa.data.detail.net}）`);
   ok(/^S\d{6}-\d{4}$/.test(sa.data.detail.serial), `產生收入流水號 ${sa.data.detail.serial}`);
+  ok(sa.data.claim.patient.reference.startsWith('Patient/'), 'Claim.patient 指向 Patient（修正 HAPI-0931，非 Practitioner）');
 
   console.log('\n[勞健保自動計算] 投保薪資 30000 × 自付費率 → 勞保720 健保465');
   const ac = await J('POST', '/api/practitioners', {
@@ -140,6 +142,12 @@ try {
   ok(lines[0].startsWith('S2026') && lines[0].slice(12, 15) === '006', '明細列：流水號(12碼)＋合庫代碼006');
   ok(txt.includes('王曉明') && txt.includes('陳小美'), '媒體檔包含受款人姓名');
   ok(lines[2].startsWith('T') && lines[2].includes('0052285'), '匯總列含總金額 52285');
+
+  console.log('\n[受款 Patient 去重] 重複結算不重複建立 Patient');
+  const ptBefore = mock.store.get('Patient').size;
+  const sa3 = await J('POST', '/api/claims/settle', { practitionerId: aId, periodStart: '2026-06-01', periodEnd: '2026-06-30' });
+  ok(sa3.data.claim.patient.reference === sa.data.claim.patient.reference, '重複結算重用同一受款 Patient');
+  ok(mock.store.get('Patient').size === ptBefore, '未重複建立 Patient（以員工編號去重）');
 } catch (e) {
   fail++;
   console.error('\n[例外]', e);
