@@ -10,9 +10,15 @@ import { WORK_TYPES, SYSTEMS, EXT } from '../config.js';
 const router = Router();
 
 const getDeviceToken = (raw) => (raw.extension || []).find((e) => e.url === EXT.deviceToken)?.valueString || '';
+const getBindingOpen = (raw) => !!(raw.extension || []).find((e) => e.url === EXT.bindingOpen)?.valueBoolean;
 function setDeviceToken(raw, token) {
   raw.extension = (raw.extension || []).filter((e) => e.url !== EXT.deviceToken);
   raw.extension.push({ url: EXT.deviceToken, valueString: token });
+  return raw;
+}
+function setBindingOpen(raw, val) {
+  raw.extension = (raw.extension || []).filter((e) => e.url !== EXT.bindingOpen);
+  raw.extension.push({ url: EXT.bindingOpen, valueBoolean: val });
   return raw;
 }
 
@@ -51,7 +57,7 @@ router.get('/device-status', async (req, res, next) => {
     const raw = await fhir.read('Practitioner', practitionerId);
     const bound = getDeviceToken(raw);
     const state = !bound ? 'none' : (bound === deviceId ? 'this' : 'other');
-    res.json({ bound: !!bound, state });
+    res.json({ bound: !!bound, state, open: getBindingOpen(raw) });
   } catch (e) {
     next(e);
   }
@@ -65,19 +71,30 @@ async function findOpenEncounter(practitionerId) {
   );
 }
 
-// 驗證裝置綁定；必要時於首次打卡自動綁定。回傳 { ok, justBound, error }
+// 驗證裝置綁定。綁定授權在會計室：需先「開放綁定」，員工下次打卡才會綁定此手機並自動上鎖。
+// 回傳 { ok, justBound, error }
 async function ensureDevice(rawPractitioner, deviceId) {
   if (!deviceId) return { ok: false, error: '缺少裝置識別，請以手機開啟打卡頁面後再操作。' };
   const bound = getDeviceToken(rawPractitioner);
-  if (!bound) {
-    setDeviceToken(rawPractitioner, deviceId);
-    await fhir.update('Practitioner', rawPractitioner.id, rawPractitioner);
-    return { ok: true, justBound: true };
+
+  // 已綁定且就是這支手機 → 直接放行
+  if (bound && bound === deviceId) return { ok: true, justBound: false };
+
+  // 需要綁定（首次）或換綁（換手機）：一律需會計室已開放
+  if (!getBindingOpen(rawPractitioner)) {
+    return {
+      ok: false,
+      error: bound
+        ? '此手機未綁定本人帳號。若要更換手機，請先請會計室「開放綁定」。'
+        : '本人尚未綁定打卡手機，請先請會計室「開放綁定」後再打卡。',
+    };
   }
-  if (bound !== deviceId) {
-    return { ok: false, error: '此手機未綁定本人帳號，請改用已綁定的手機打卡，或請會計室重設裝置綁定。' };
-  }
-  return { ok: true, justBound: false };
+
+  // 會計已開放 → 綁定目前這支手機，並自動上鎖（消耗本次開放）
+  setDeviceToken(rawPractitioner, deviceId);
+  setBindingOpen(rawPractitioner, false);
+  await fhir.update('Practitioner', rawPractitioner.id, rawPractitioner);
+  return { ok: true, justBound: true };
 }
 
 // 簽到

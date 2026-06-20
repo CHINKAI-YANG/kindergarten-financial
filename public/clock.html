@@ -124,9 +124,13 @@ async function loadDeviceStatus(){
   if(!id) return;
   try{
     const s = await api(`/api/clock/device-status?practitionerId=${id}&deviceId=${DEV}`);
-    if(s.state==='none') box.innerHTML = `<div class="banner warn">📱 本人尚未綁定手機，<b>第一次簽到時將自動綁定此手機</b>，之後僅能用這支手機打卡。</div>`;
-    else if(s.state==='this') box.innerHTML = `<div class="banner good">📱 已綁定此手機，可正常打卡。</div>`;
-    else box.innerHTML = `<div class="banner bad">🚫 此手機<b>不是</b>本人綁定的裝置，無法打卡。請改用已綁定的手機，或請會計室重設綁定。</div>`;
+    if(s.state==='this') box.innerHTML = `<div class="banner good">📱 已綁定此手機，可正常打卡。</div>`;
+    else if(s.state==='none') box.innerHTML = s.open
+      ? `<div class="banner warn">📱 會計室已開放綁定，<b>按「簽到」即會綁定此手機</b>（綁定後僅能用這支手機打卡）。</div>`
+      : `<div class="banner bad">🔒 本人尚未綁定打卡手機，請先請<b>會計室「開放綁定」</b>後再打卡。</div>`;
+    else box.innerHTML = s.open
+      ? `<div class="banner warn">📱 會計室已開放換綁，<b>按「簽到」將改綁此手機</b>。</div>`
+      : `<div class="banner bad">🚫 此手機<b>不是</b>您綁定的裝置，無法打卡。若要換手機請洽<b>會計室「開放綁定」</b>。</div>`;
   }catch(e){ /* 忽略狀態查詢錯誤 */ }
 }
 

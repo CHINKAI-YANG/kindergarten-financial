@@ -119,6 +119,7 @@
         <div><label>健保自付額</label><input id="f-health" type="number" value="0"></div>
         <div><label>銀行代碼</label><input id="f-bcode" value="006"></div>
         <div><label>銀行帳號</label><input id="f-bacc" placeholder="1234567890123"></div>
+        <div><label>Email（忘記簽退提醒）</label><input id="f-email" type="email" placeholder="name@example.com"></div>
       </div>
       <div class="hint" id="rateHint"></div>
       <div class="row">
@@ -178,6 +179,7 @@
       <div class="row">
         <div style="min-width:240px"><label>篩選人員</label><select id="at-pr"><option value="">全部</option></select></div>
         <button class="btn gray" id="at-reload">重新整理</button>
+        <button class="btn amber" id="at-remind">✉ 寄送忘記簽退提醒</button>
         <span class="pill" id="at-stat"></span>
       </div>
       <div id="at-stale"></div>
@@ -308,13 +310,14 @@ async function loadStaff(){
     const opts = '<option value="">— 選擇 —</option>'+staffCache.map(p=>`<option value="${p.id}">${p.name}（${p.employeeId}）</option>`).join('');
     ['#s-pr','#se-pr','#at-pr'].forEach(sel=>{ $(sel).innerHTML = (sel==='#at-pr'?'<option value="">全部</option>':'')+opts; });
     $('#staff-rows').innerHTML = staffCache.length ? staffCache.map(p=>`<tr>
-      <td>${p.employeeId}</td><td><b>${p.name}</b></td>
+      <td>${p.employeeId}</td>
+      <td><b>${p.name}</b>${p.email?`<div class="muted" style="font-size:11px">${p.email}</div>`:''}</td>
       <td>${p.salaryMode==='monthly'?'<span class="tag month">月薪制</span>':'<span class="tag hour">純時薪</span>'}</td>
       <td class="r">${p.baseSalary?NT(p.baseSalary):NT(p.hourlyRate)+'/時'}</td>
       <td class="r">${p.insuredSalary?NT(p.insuredSalary):'—'}</td>
       <td class="r">${p.salaryMode==='monthly'?`${NT(p.laborInsurance)}/${NT(p.healthInsurance)}<br><span class="tag ${p.autoInsurance?'auto':'manual'}">${p.autoInsurance?'自動':'手動'}</span>`:'<span class="muted">不適用</span>'}</td>
       <td>${acctHtml(p)}</td>
-      <td class="c">${p.deviceBound?'<span class="tag bound">已綁定</span><br><button class="btn gray sm" style="margin-top:4px" onclick="resetDevice(\''+p.id+'\',\''+p.name+'\')">解除綁定</button>':'<span class="tag unbound">未綁定</span>'}</td>
+      <td class="c">${deviceCell(p)}</td>
       <td class="c"><button class="btn gray sm" onclick="editStaff('${p.id}')">編輯</button>
       <button class="btn red sm" onclick="delStaff('${p.id}','${p.name}')">刪</button></td>
     </tr>`).join('') : '<tr><td colspan="9" class="muted">尚無員工，請新增。</td></tr>';
@@ -326,7 +329,8 @@ function staffForm(){ return {
   afterCareRate:+$('#f-after').value||0, overtimeRate:+$('#f-ot').value||0,
   insuredSalary:+$('#f-insured').value||0, autoInsurance:$('#f-auto').checked,
   laborInsurance:+$('#f-labor').value||0, healthInsurance:+$('#f-health').value||0,
-  bankCode:$('#f-bcode').value.trim()||'006', bankAccount:$('#f-bacc').value.trim() }; }
+  bankCode:$('#f-bcode').value.trim()||'006', bankAccount:$('#f-bacc').value.trim(),
+  email:$('#f-email').value.trim() }; }
 let editingId=null;
 function fillForm(p){ editingId=p.id||null;
   $('#f-emp').value=p.employeeId||''; $('#f-name').value=p.name||'';
@@ -335,12 +339,20 @@ function fillForm(p){ editingId=p.id||null;
   $('#f-insured').value=p.insuredSalary||0; $('#f-auto').checked = p.autoInsurance!==false;
   $('#f-labor').value=(p.autoInsurance!==false? (p.laborInsuranceComputed??p.laborInsurance) : (p.laborInsuranceManual??p.laborInsurance))||0;
   $('#f-health').value=(p.autoInsurance!==false? (p.healthInsuranceComputed??p.healthInsurance) : (p.healthInsuranceManual??p.healthInsurance))||0;
-  $('#f-bcode').value=p.bankCode||'006'; $('#f-bacc').value=p.bankAccount||''; updateAutoUI(); }
+  $('#f-bcode').value=p.bankCode||'006'; $('#f-bacc').value=p.bankAccount||'';
+  $('#f-email').value=p.email||''; updateAutoUI(); }
 window.editStaff=(id)=>{ const p=staffCache.find(x=>x.id===id); if(p){fillForm(p); window.scrollTo({top:0,behavior:'smooth'});} };
 window.delStaff=async(id,name)=>{ if(!confirm('確定刪除 '+name+'？')) return;
   try{ await api('/api/practitioners/'+id,{method:'DELETE'}); loadStaff(); }catch(e){ msg('#staff-msg',e.message,false);} };
-window.resetDevice=async(id,name)=>{ if(!confirm('解除「'+name+'」的打卡裝置綁定？下次打卡會綁定新手機。')) return;
-  try{ await api('/api/practitioners/'+id+'/reset-device',{method:'POST'}); loadStaff(); }catch(e){ msg('#staff-msg',e.message,false);} };
+function deviceCell(p){
+  let tag;
+  if(p.deviceBound) tag = '<span class="tag bound">已綁定</span>'+(p.bindingOpen?' <span class="tag unbound">待換綁</span>':'');
+  else tag = p.bindingOpen ? '<span class="tag unbound">已開放·待綁定</span>' : '<span class="tag unbound">未綁定</span>';
+  const label = p.deviceBound?'重新開放綁定':'開放綁定';
+  return `${tag}<br><button class="btn gray sm" style="margin-top:4px" onclick="openBinding('${p.id}','${p.name}')">${label}</button>`;
+}
+window.openBinding=async(id,name)=>{ if(!confirm('開放「'+name+'」綁定手機？\n下一次該員工用手機打卡時，就會綁定當時那支手機（綁定後自動上鎖）。')) return;
+  try{ await api('/api/practitioners/'+id+'/open-binding',{method:'POST'}); msg('#staff-msg','✅ 已開放「'+name+'」綁定，請該員工用手機打卡完成綁定。',true); loadStaff(); }catch(e){ msg('#staff-msg',e.message,false);} };
 $('#staff-save').addEventListener('click', async()=>{
   const body=staffForm(); if(!body.name||!body.employeeId) return msg('#staff-msg','請填寫員工編號與姓名',false);
   try{
@@ -351,8 +363,8 @@ $('#staff-save').addEventListener('click', async()=>{
   }catch(e){ msg('#staff-msg',e.message,false); }
 });
 $('#staff-clear').addEventListener('click',()=>{ fillForm({autoInsurance:true}); editingId=null; });
-$('#ex-a').addEventListener('click',()=>fillForm({employeeId:'T001',name:'王曉明',baseSalary:42000,hourlyRate:0,afterCareRate:280,overtimeRate:180,insuredSalary:42000,autoInsurance:false,laborInsuranceManual:930,healthInsuranceManual:1510,bankCode:'006',bankAccount:'1234567890123'}));
-$('#ex-b').addEventListener('click',()=>fillForm({employeeId:'P001',name:'陳小美',baseSalary:0,hourlyRate:190,insuredSalary:0,autoInsurance:true,bankCode:'006',bankAccount:'9876543210987'}));
+$('#ex-a').addEventListener('click',()=>fillForm({employeeId:'T001',name:'王曉明',baseSalary:42000,hourlyRate:0,afterCareRate:280,overtimeRate:180,insuredSalary:42000,autoInsurance:false,laborInsuranceManual:930,healthInsuranceManual:1510,bankCode:'006',bankAccount:'1234567890123',email:'teacher.wang@example.com'}));
+$('#ex-b').addEventListener('click',()=>fillForm({employeeId:'P001',name:'陳小美',baseSalary:0,hourlyRate:190,insuredSalary:0,autoInsurance:true,bankCode:'006',bankAccount:'9876543210987',email:'parttime.chen@example.com'}));
 
 // ================= 排班 =================
 async function loadSchedule(){
@@ -421,6 +433,19 @@ window.fixOut=async(id)=>{
 };
 $('#at-reload').addEventListener('click',loadAttend);
 $('#at-pr').addEventListener('change',loadAttend);
+$('#at-remind').addEventListener('click', async()=>{
+  const b=$('#at-remind'); b.disabled=true; const t=b.textContent; b.textContent='寄送中…';
+  try{
+    const r=await api('/api/attendance/remind',{method:'POST'});
+    let how = r.sent>0 ? `已寄出 ${r.sent} 封 email` : '';
+    if(r.dryRun>0) how += (how?'、':'')+`乾跑 ${r.dryRun} 封（未設定 SMTP，僅記錄未真的寄出）`;
+    alert(`忘記簽退提醒\n──────────\n跨日未簽退：${r.staleCount} 筆\n${how||'本次無需寄送'}`
+      + (r.skipped?`\n已提醒過略過：${r.skipped} 筆`:'')
+      + (r.noEmail?`\n無 email 未寄：${r.noEmail} 筆`:''));
+    loadAttend();
+  }catch(e){ alert(e.message); }
+  finally{ b.disabled=false; b.textContent=t; }
+});
 
 // ================= 結算 =================
 function payslipHtml(d){

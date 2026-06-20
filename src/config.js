@@ -30,6 +30,20 @@ export const config = {
   // 會計室核銷端登入密碼。打卡端免密碼（櫃檯公用）；簽核/薪資等管理 API 一律需此密碼。
   // ★ 正式使用請務必改成自己的密碼（設定環境變數 ADMIN_PASSWORD）。
   adminPassword: process.env.ADMIN_PASSWORD || 'admin1234',
+
+  // 寄信設定（忘記簽退提醒）。未設定 SMTP_HOST 時走「乾跑」模式：只記錄不真的寄出，方便展示。
+  // 要真的寄信，請設定 SMTP_HOST/PORT/USER/PASS（例如 Gmail 應用程式密碼）與 MAIL_FROM。
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
+  mailFrom: process.env.MAIL_FROM || '益民幼兒園 <no-reply@morninglight.kindergarten>',
+
+  // 自動檢查「忘記簽退」並寄提醒的間隔（小時）；設 0 可關閉自動（仍可手動寄送）。
+  reminderIntervalHours: Number(process.env.REMINDER_INTERVAL_HOURS ?? 6),
 };
 
 // 常見銀行代碼對照（帳號清楚顯示用）
@@ -61,6 +75,8 @@ export const EXT = {
   bankCode: 'http://morninglight.kindergarten/fhir/ext/bank-code',
   bankAccount: 'http://morninglight.kindergarten/fhir/ext/bank-account',
   deviceToken: 'http://morninglight.kindergarten/fhir/ext/device-token', // 打卡綁定之裝置
+  bindingOpen: 'http://morninglight.kindergarten/fhir/ext/binding-open', // 會計是否已開放綁定
+  reminded: 'http://morninglight.kindergarten/fhir/ext/reminded', // 該出勤已寄過忘記簽退提醒
   payroll: 'http://morninglight.kindergarten/fhir/ext/payroll-detail',
 };
 

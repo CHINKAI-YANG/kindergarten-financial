@@ -43,8 +43,12 @@ export function practitionerToFhir(p) {
       decimalExt(EXT.healthInsurance, p.healthInsurance), // 手動覆寫金額
       stringExt(EXT.bankCode, p.bankCode || config.defaultBankCode),
       stringExt(EXT.bankAccount, p.bankAccount),
+      // 會計是否已開放此員工綁定手機（打卡端據此才允許綁定）
+      boolExt(EXT.bindingOpen, p.bindingOpen === true),
     ],
   };
+  // Email（忘記簽退提醒用）以標準 telecom 承載
+  if (p.email) resource.telecom = [{ system: 'email', value: p.email }];
   // 打卡綁定之裝置（僅在有值時寫入，避免編輯時被清掉）
   if (p.deviceToken) resource.extension.push(stringExt(EXT.deviceToken, p.deviceToken));
   if (p.id) resource.id = p.id;
@@ -95,9 +99,12 @@ export function practitionerFromFhir(r) {
     bankCode,
     bankAccount,
     bankLabel: bankLabel(bankCode),
+    // Email（忘記簽退提醒）
+    email: r.telecom?.find((t) => t.system === 'email')?.value || '',
     // 裝置綁定
     deviceToken,
     deviceBound: !!deviceToken,
+    bindingOpen: !!extVal(r, EXT.bindingOpen), // 會計是否已開放綁定
     // 由本薪自動判定薪資模式（核心防錯機制之一）
     salaryMode: baseSalary > 0 ? 'monthly' : 'hourly',
   };
@@ -110,6 +117,7 @@ export function practitionerPublic(r) {
     employeeId: r.identifier?.find((i) => i.system === SYSTEMS.employeeId)?.value || '',
     name: r.name?.[0]?.text || r.name?.[0]?.family || '(未命名)',
     deviceBound: !!extVal(r, EXT.deviceToken),
+    bindingOpen: !!extVal(r, EXT.bindingOpen),
   };
 }
 
@@ -132,7 +140,7 @@ export function encounterHours(encounter) {
 }
 
 // 跨日未簽退：狀態 in-progress 且簽到日期早於今天 → 需「隔天立即處理」
-function isStale(encounter) {
+export function isStale(encounter) {
   if (encounter.status !== 'in-progress' || !encounter.period?.start) return false;
   const d = new Date(encounter.period.start);
   const today = new Date();

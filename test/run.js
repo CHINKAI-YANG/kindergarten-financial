@@ -69,9 +69,10 @@ try {
   const a = await J('POST', '/api/practitioners', {
     employeeId: 'T001', name: '王曉明', baseSalary: 42000, afterCareRate: 280, overtimeRate: 180,
     insuredSalary: 42000, autoInsurance: false, laborInsurance: 930, healthInsurance: 1510,
-    bankCode: '006', bankAccount: '1234567890123',
+    bankCode: '006', bankAccount: '1234567890123', email: 'teacher.wang@example.com',
   });
   ok(a.data.salaryMode === 'monthly', '本薪>0 自動判定為月薪制');
+  ok(a.data.email === 'teacher.wang@example.com', '人事資料 Email 欄位寫入/讀回正確');
   ok(a.data.autoInsurance === false && a.data.laborInsurance === 930 && a.data.healthInsurance === 1510, '手動覆寫勞健保 930/1510 生效');
   ok(a.data.bankLabel.includes('合作金庫'), '帳號清楚：銀行代碼 006 標示為合作金庫');
   const aId = a.data.id;
@@ -114,33 +115,41 @@ try {
   ok(fix.data.status === 'finished' && fix.data.hours === 8, '補登簽退後狀態 finished，工時重算為 8.00');
   ok((await J('POST', '/api/claims/settle', { practitionerId: zId, periodStart: '2026-06-01', periodEnd: '2026-06-30' })).data.detail.net === 800, '補登後可結算，實發 = 800');
 
-  console.log('\n[跨日未簽退提醒] 隔天提醒立即處理');
-  const rr = await J('POST', '/api/practitioners', { employeeId: 'R001', name: '黃小強', baseSalary: 0, hourlyRate: 150, bankCode: '700', bankAccount: '00112233445' });
+  console.log('\n[跨日未簽退提醒] 隔天提醒 + 自動寄 email');
+  const rr = await J('POST', '/api/practitioners', { employeeId: 'R001', name: '黃小強', baseSalary: 0, hourlyRate: 150, bankCode: '700', bankAccount: '00112233445', email: 'huang@example.com' });
   const staleEnc = await addEnc(`Practitioner/${rr.data.id}`, '黃小強', 'regular', daysAgo(3), undefined); // 3天前未簽退
   ok(staleEnc.data.stale === true, '跨日未簽退被標記為 stale');
   const rem = await J('GET', `/api/clock/reminders?practitionerId=${rr.data.id}`);
   ok(rem.status === 200 && rem.data.length === 1, '打卡端提醒 API 回報 1 筆需立即處理');
+  const mail1 = await J('POST', '/api/attendance/remind');
+  ok(mail1.data.staleCount >= 1 && (mail1.data.sent + mail1.data.dryRun) >= 1, `寄送忘記簽退提醒：跨日 ${mail1.data.staleCount} 筆、寄/乾跑 ${mail1.data.sent + mail1.data.dryRun} 封`);
+  ok(mail1.data.items.some((i) => i.email === 'huang@example.com'), '提醒對象包含該員工 email');
+  const mail2 = await J('POST', '/api/attendance/remind');
+  ok(mail2.data.sent === 0 && mail2.data.dryRun === 0 && mail2.data.skipped >= 1, '同一筆不重複寄送（已標記 reminded）');
 
   console.log('\n[權限分流] 打卡端不得暴露薪資');
   const pub = await J('GET', '/api/clock/practitioners');
   const leak = pub.data.some((p) => 'baseSalary' in p || 'hourlyRate' in p || 'laborInsurance' in p);
   ok(!leak && 'deviceBound' in pub.data[0], '打卡端清單僅含姓名/編號/綁定狀態，無任何薪資欄位');
 
-  console.log('\n[打卡綁定裝置] 首次綁定 → 限同裝置 → 會計重設');
+  console.log('\n[打卡綁定裝置] 會計開放 → 打卡端綁定 → 限同裝置 → 會計開放換綁');
   const c = await J('POST', '/api/practitioners', { employeeId: 'D001', name: '吳小安', baseSalary: 0, hourlyRate: 160, bankCode: '006', bankAccount: '6677889900' });
   const cId = c.data.id;
   ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, workType: 'regular' })).status === 403, '未帶裝置識別 → 拒絕打卡（403）');
+  ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-1' })).status === 403, '會計未開放前，手機無法自助綁定（403）');
+  await J('POST', `/api/practitioners/${cId}/open-binding`);
   const ci = await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-1' });
-  ok(ci.status === 201 && ci.data.deviceJustBound === true, '首次以 phone-1 打卡 → 自動綁定該裝置');
+  ok(ci.status === 201 && ci.data.deviceJustBound === true, '會計開放後，phone-1 打卡完成綁定');
   await J('POST', '/api/clock/clock-out', { practitionerId: cId, deviceId: 'phone-1' });
-  ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-2' })).status === 403, '改用 phone-2 → 拒絕（非綁定裝置）');
+  ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-2' })).status === 403, '綁定後換 phone-2 → 拒絕（未再開放）');
   const st1 = await J('GET', `/api/clock/device-status?practitionerId=${cId}&deviceId=phone-1`);
   const st2 = await J('GET', `/api/clock/device-status?practitionerId=${cId}&deviceId=phone-2`);
   ok(st1.data.state === 'this' && st2.data.state === 'other', '裝置狀態查詢：phone-1=this、phone-2=other');
-  await J('POST', `/api/practitioners/${cId}/reset-device`);
-  ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-2' })).data.deviceJustBound === true, '會計重設綁定後，phone-2 可重新綁定');
+  await J('POST', `/api/practitioners/${cId}/open-binding`);
+  ok((await J('POST', '/api/clock/clock-in', { practitionerId: cId, deviceId: 'phone-2' })).data.deviceJustBound === true, '會計再開放後，phone-2 可換綁');
 
   console.log('\n[打卡流程] 簽到/重複簽到/簽退/重複簽退');
+  await J('POST', `/api/practitioners/${bId}/open-binding`); // 會計先開放，員工才能綁定打卡
   const ci1 = await J('POST', '/api/clock/clock-in', { practitionerId: bId, deviceId: 'devB', workType: 'regular' });
   ok(ci1.status === 201, '簽到成功（in-progress）');
   ok((await J('POST', '/api/clock/clock-in', { practitionerId: bId, deviceId: 'devB' })).status === 409, '尚未簽退再簽到 → 阻擋（409）');

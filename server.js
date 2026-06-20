@@ -101,6 +101,20 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`  員工打卡端：http://localhost:${config.port}/clock.html`);
     console.log(`  會計核銷端：http://localhost:${config.port}/admin.html`);
     console.log(`  FHIR 伺服器：${config.fhirBaseUrl}`);
-    console.log(`  租戶標記：  ${config.tenantTag}\n`);
+    console.log(`  租戶標記：  ${config.tenantTag}`);
+    if (config.reminderIntervalHours > 0) {
+      console.log(`  忘記簽退提醒：每 ${config.reminderIntervalHours} 小時自動檢查${config.smtp.host ? '並寄信' : '（未設 SMTP，乾跑模式）'}`);
+    }
+    console.log('');
   });
+
+  // 自動檢查「忘記簽退」並寄提醒（僅正式啟動時執行；測試以 createApp 匯入時不會觸發）
+  if (config.reminderIntervalHours > 0) {
+    setInterval(() => {
+      import('./src/services/reminders.js')
+        .then((m) => m.remindForgotClockouts())
+        .then((r) => { if (r.staleCount) console.log(`[reminder] 忘記簽退 ${r.staleCount} 筆：寄出 ${r.sent}、乾跑 ${r.dryRun}、略過 ${r.skipped}`); })
+        .catch((e) => console.warn('[reminder] 檢查失敗：', e.message));
+    }, config.reminderIntervalHours * 3600000);
+  }
 }

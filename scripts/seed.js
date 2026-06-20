@@ -46,6 +46,7 @@ async function main() {
     // 勞健保採手動覆寫，沿用計畫書數字（930／1,510），實發剛好 43,640
     insuredSalary: 42000, autoInsurance: false, laborInsurance: 930, healthInsurance: 1510,
     bankCode: '006', bankAccount: '1234567890123',
+    email: 'teacher.wang@example.com', bindingOpen: true, // 預設開放綁定，方便展示打卡
   }));
   console.log('建立 Practitioner A 王曉明：', A.id);
   const refA = `Practitioner/${A.id}`;
@@ -78,6 +79,7 @@ async function main() {
     employeeId: 'P001', name: '陳小美', baseSalary: 0, hourlyRate: 190,
     // 純時薪：本薪 0 → 自動封鎖勞健保代扣（autoInsurance 與投保薪資皆不影響時薪結算）
     insuredSalary: 0, autoInsurance: true, bankCode: '006', bankAccount: '9876543210987',
+    email: 'parttime.chen@example.com', bindingOpen: true,
   }));
   console.log('建立 Practitioner B 陳小美：', B.id);
   const refB = `Practitioner/${B.id}`;

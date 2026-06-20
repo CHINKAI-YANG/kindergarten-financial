@@ -4,8 +4,18 @@
 import { Router } from 'express';
 import { fhir } from '../fhirClient.js';
 import { encounterView } from '../mappers.js';
+import { remindForgotClockouts } from '../services/reminders.js';
 
 const router = Router();
+
+// 寄送「忘記簽退」email 提醒（跨日未簽退者，每筆只寄一次；force=true 可重寄）
+router.post('/remind', async (req, res, next) => {
+  try {
+    res.json(await remindForgotClockouts({ force: req.body?.force === true }));
+  } catch (e) {
+    next(e);
+  }
+});
 
 // 列出全部出勤（可選 practitionerId 過濾），含異常標記
 router.get('/', async (req, res, next) => {
