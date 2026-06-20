@@ -41,13 +41,27 @@ export function createApp() {
     }
   });
 
-  // API 路由
-  app.use('/api/clock', clockRoutes); // 員工打卡端（最小揭露）
-  app.use('/api/practitioners', practitionerRoutes);
-  app.use('/api/scheduling', schedulingRoutes);
-  app.use('/api/attendance', attendanceRoutes);
-  app.use('/api/claims', claimRoutes);
-  app.use('/api/payout', payoutRoutes);
+  // 會計室核銷端登入（驗證密碼；前端登入後於後續請求帶 x-admin-key 標頭）
+  app.post('/api/admin/login', (req, res) => {
+    if (req.body?.password === config.adminPassword) return res.json({ ok: true });
+    res.status(401).json({ ok: false, error: '密碼錯誤' });
+  });
+
+  // 授權中介層：保護簽核/薪資等管理 API。打卡端與 config/health 不受此限。
+  function requireAdmin(req, res, next) {
+    if (req.get('x-admin-key') === config.adminPassword) return next();
+    res.status(401).json({ error: '需要會計室密碼授權，請先登入核銷端。' });
+  }
+
+  // 員工打卡端 API（免登入，櫃檯公用；最小揭露，永不回傳薪資）
+  app.use('/api/clock', clockRoutes);
+
+  // 以下為「會計室核銷端」專用 API，一律需密碼授權（打卡端無法存取簽核/薪資）
+  app.use('/api/practitioners', requireAdmin, practitionerRoutes);
+  app.use('/api/scheduling', requireAdmin, schedulingRoutes);
+  app.use('/api/attendance', requireAdmin, attendanceRoutes);
+  app.use('/api/claims', requireAdmin, claimRoutes);
+  app.use('/api/payout', requireAdmin, payoutRoutes);
 
   // 靜態前端（兩個 HTML 操作端）
   app.use(express.static(path.join(__dirname, 'public')));

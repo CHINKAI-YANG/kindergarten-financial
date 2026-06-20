@@ -59,14 +59,35 @@
     body{ background:#fff; } main{ padding:0; }
   }
   #printArea{ display:none; }
+  /* 登入遮罩：未登入時隱藏所有簽核/管理內容 */
+  body.locked nav.tabs, body.locked main{ display:none; }
+  #login{ position:fixed; inset:0; background:linear-gradient(135deg,#1f6b54,#16513f); display:none; align-items:center; justify-content:center; z-index:1000; }
+  #login.show{ display:flex; }
+  #login .box{ background:#fff; padding:34px 30px; border-radius:18px; width:340px; max-width:90vw; box-shadow:0 24px 70px rgba(0,0,0,.35); text-align:center; }
+  #login h2{ color:var(--green); margin:0 0 4px; }
+  #login .tip{ color:#7c8b84; font-size:13px; margin:0 0 16px; }
+  #login input{ text-align:center; font-size:18px; padding:12px; }
+  #login button{ width:100%; margin-top:14px; padding:13px; }
+  #login .err{ color:var(--warn); font-size:13px; min-height:18px; margin-top:8px; }
+  #logout{ cursor:pointer; text-decoration:underline; }
 </style>
 </head>
-<body>
+<body class="locked">
+
+<!-- 登入遮罩：會計室核銷端需密碼；員工打卡端無此密碼，無法進入簽核 -->
+<div id="login"><div class="box">
+  <h2>🔒 會計室核銷端</h2>
+  <p class="tip">簽核／薪資核銷專區，請輸入會計室密碼</p>
+  <input type="password" id="login-pw" placeholder="請輸入密碼" autocomplete="current-password">
+  <button class="btn" id="login-btn">登入</button>
+  <div class="err" id="login-err"></div>
+</div></div>
+
 <header>
   <h1>📊 會計室核銷端</h1>
   <div class="meta">
     <div id="health">● 連線檢查中…</div>
-    <div><a href="/clock.html">← 員工打卡端</a>　<span id="tenant"></span></div>
+    <div><span id="tenant"></span>　<a id="logout">登出</a></div>
   </div>
 </header>
 
@@ -224,9 +245,12 @@ const fmtD = (iso)=> iso ? new Date(iso).toLocaleDateString('zh-TW') : '—';
 const acctHtml = (p)=> `<span class="acct">${p.bankAccount||'—'}</span><div class="muted" style="font-size:12px">${p.bankLabel||('代碼 '+(p.bankCode||''))}</div>`;
 let CFG = { laborInsuranceRate:0.024, healthInsuranceRate:0.0155 };
 
-async function api(url, opts){
-  const r = await fetch(url, opts);
+function adminKey(){ return sessionStorage.getItem('mlkg_admin_key')||''; }
+async function api(url, opts={}){
+  const headers = Object.assign({}, opts.headers, { 'x-admin-key': adminKey() });
+  const r = await fetch(url, { ...opts, headers });
   const data = await r.json().catch(()=>({}));
+  if(r.status===401){ showLogin('登入已逾時或密碼有誤，請重新登入'); const e=new Error(data.error||'需要授權'); e.auth=true; throw e; }
   if(!r.ok){ const e=new Error(data.error||('錯誤 '+r.status)); e.data=data; throw e; }
   return data;
 }
@@ -249,15 +273,18 @@ document.querySelectorAll('nav.tabs button').forEach(b=>{
   });
 });
 
-fetch('/api/config').then(r=>r.json()).then(c=>{
-  CFG = c; $('#tenant').textContent='FHIR：'+c.fhirBaseUrl+'｜租戶：'+c.tenantTag;
-  updateAutoUI();
-});
-fetch('/api/health').then(r=>r.json()).then(h=>{
-  $('#health').innerHTML = h.ok
-    ? `<span class="dot" style="background:#7CFFB2"></span>已連線 FHIR（${h.software||'server'} ${h.fhirVersion||''}）`
-    : `<span class="dot" style="background:#ffb3a7"></span>連線失敗：${h.error||''}`;
-}).catch(()=>{ $('#health').textContent='連線檢查失敗'; });
+function initApp(){
+  fetch('/api/config').then(r=>r.json()).then(c=>{
+    CFG = c; $('#tenant').textContent='FHIR：'+c.fhirBaseUrl+'｜租戶：'+c.tenantTag;
+    updateAutoUI();
+  });
+  fetch('/api/health').then(r=>r.json()).then(h=>{
+    $('#health').innerHTML = h.ok
+      ? `<span class="dot" style="background:#7CFFB2"></span>已連線 FHIR（${h.software||'server'} ${h.fhirVersion||''}）`
+      : `<span class="dot" style="background:#ffb3a7"></span>連線失敗：${h.error||''}`;
+  }).catch(()=>{ $('#health').textContent='連線檢查失敗'; });
+  loadStaff();
+}
 
 // ================= 人事 =================
 let staffCache = [];
@@ -472,12 +499,35 @@ async function loadPayoutPreview(){
   }catch(e){ msg('#po-msg',e.message,false); }
 }
 $('#po-prev').addEventListener('click',loadPayoutPreview);
-$('#po-dl').addEventListener('click', ()=>{
-  window.location = `/api/payout/bankfile?periodStart=${$('#po-start').value}&periodEnd=${$('#po-end').value}`;
+$('#po-dl').addEventListener('click', async ()=>{
+  try{
+    const r = await fetch(`/api/payout/bankfile?periodStart=${$('#po-start').value}&periodEnd=${$('#po-end').value}`, { headers:{ 'x-admin-key': adminKey() } });
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||('錯誤 '+r.status)); }
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='salary.txt'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    msg('#po-msg','✅ 已下載 salary.txt', true);
+  }catch(e){ msg('#po-msg', e.message, false); }
 });
 
 const loaders = { staff:loadStaff, schedule:loadSchedule, attend:loadAttend, settle:loadStaff, approve:loadClaims, payout:()=>{} };
-loadStaff();
+
+// ===== 登入控制：會計室核銷端需密碼；員工打卡端無此密碼，無法進入簽核 =====
+function showLogin(err){ document.body.classList.add('locked'); $('#login').classList.add('show'); $('#login-err').textContent=err||''; setTimeout(()=>$('#login-pw').focus(),50); }
+function hideLogin(){ document.body.classList.remove('locked'); $('#login').classList.remove('show'); }
+async function doLogin(){
+  const pw=$('#login-pw').value; if(!pw){ $('#login-err').textContent='請輸入密碼'; return; }
+  try{
+    const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    if(!r.ok){ $('#login-err').textContent='密碼錯誤，請再試一次'; $('#login-pw').select(); return; }
+    sessionStorage.setItem('mlkg_admin_key', pw); $('#login-pw').value=''; hideLogin(); initApp();
+  }catch(e){ $('#login-err').textContent='登入失敗：'+e.message; }
+}
+$('#login-btn').addEventListener('click', doLogin);
+$('#login-pw').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+$('#logout').addEventListener('click', ()=>{ sessionStorage.removeItem('mlkg_admin_key'); showLogin('已登出'); });
+
+// 啟動：已登入則直接進入，否則顯示登入畫面
+if(adminKey()){ hideLogin(); initApp(); } else { showLogin(); }
 </script>
 </body>
 </html>

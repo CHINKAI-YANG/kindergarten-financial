@@ -26,6 +26,10 @@ export const config = {
   // 之後搜尋一律以 _tag 過濾，確保只讀寫「本園」的資料。
   // 若多人共用同一公開伺服器，請把 TENANT_TAG 改成獨一無二的字串以免互相干擾。
   tenantTag: process.env.TENANT_TAG || 'morninglight-kg-demo',
+
+  // 會計室核銷端登入密碼。打卡端免密碼（櫃檯公用）；簽核/薪資等管理 API 一律需此密碼。
+  // ★ 正式使用請務必改成自己的密碼（設定環境變數 ADMIN_PASSWORD）。
+  adminPassword: process.env.ADMIN_PASSWORD || 'admin1234',
 };
 
 // 常見銀行代碼對照（帳號清楚顯示用）

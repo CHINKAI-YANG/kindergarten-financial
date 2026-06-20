@@ -10,6 +10,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mock = await startMockFhir(0);
 process.env.FHIR_BASE_URL = `http://127.0.0.1:${mock.port}`;
 process.env.TENANT_TAG = 'test-' + Date.now();
+process.env.ADMIN_PASSWORD = 'test-admin-pw';
 
 const { createApp } = await import('../server.js');
 const { SYSTEMS, WORK_TYPES } = await import('../src/config.js');
@@ -23,13 +24,20 @@ function ok(cond, label) {
   if (cond) { pass++; console.log('  ✓', label); }
   else { fail++; console.error('  ✗', label); }
 }
+const ADMIN = 'test-admin-pw';
 async function J(method, path, body) {
-  const r = await fetch(base + path, {
+  const headers = { 'x-admin-key': ADMIN }; // 模擬已登入的會計室核銷端
+  if (body) headers['Content-Type'] = 'application/json';
+  const r = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, data };
+}
+// 不帶授權的原始請求（用於驗證權限隔離）
+function raw(path, method = 'GET', body) {
+  return fetch(base + path, {
     method, headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await r.json().catch(() => ({}));
-  return { status: r.status, data };
 }
 const wt = (code) => ({ system: SYSTEMS.workType, code, display: WORK_TYPES[code].display });
 const addEnc = (ref, name, code, start, end) =>
@@ -48,6 +56,14 @@ try {
 
   console.log('\n[健檢]');
   ok((await J('GET', '/api/health')).data.ok === true, '可連線 mock FHIR 伺服器');
+
+  console.log('\n[權限隔離] 簽核/薪資 API 需密碼；打卡端無法進入');
+  ok((await raw('/api/claims')).status === 401, '未授權存取 /api/claims（簽核）→ 401');
+  ok((await raw('/api/practitioners')).status === 401, '未授權存取 /api/practitioners → 401');
+  ok((await raw('/api/payout/preview')).status === 401, '未授權存取 /api/payout（撥款）→ 401');
+  ok((await raw('/api/clock/practitioners')).status === 200, '打卡端 /api/clock 免密碼可用（櫃檯公用）');
+  ok((await raw('/api/admin/login', 'POST', { password: 'wrong' })).status === 401, '密碼錯誤登入 → 401');
+  ok((await raw('/api/admin/login', 'POST', { password: ADMIN })).status === 200, '密碼正確登入 → 200');
 
   console.log('\n[情境 A] 月薪制導師（手動勞健保 930/1510 → 實發 43,640）');
   const a = await J('POST', '/api/practitioners', {
@@ -147,7 +163,7 @@ try {
   const prev = await J('GET', '/api/payout/preview?periodStart=2026-06-01&periodEnd=2026-06-30');
   ok(prev.data.count === 2 && prev.data.total === 52285, `撥款預覽 2 筆，總額 52,285（實得 ${prev.data.total}）`);
   ok(prev.data.rows.every((r) => /^S\d{6}-\d{4}$/.test(r.serial)), '每筆撥款皆有流水號');
-  const bf = await fetch(base + '/api/payout/bankfile?periodStart=2026-06-01&periodEnd=2026-06-30');
+  const bf = await fetch(base + '/api/payout/bankfile?periodStart=2026-06-01&periodEnd=2026-06-30', { headers: { 'x-admin-key': ADMIN } });
   const txt = await bf.text();
   const lines = txt.trim().split(/\r?\n/);
   ok(bf.headers.get('content-disposition')?.includes('salary.txt'), '回應為 salary.txt 附件下載');
