@@ -210,6 +210,7 @@
       <div class="row no-print">
         <button class="btn gray" id="ap-reload">重新整理</button>
         <button class="btn amber" id="ap-print">🖨 列印核銷清冊</button>
+        <button class="btn gray" id="ap-cleanup">🧹 清除重複</button>
       </div>
       <table><thead><tr><th>流水號</th><th>姓名</th><th>期間</th><th>模式</th><th class="r">應發</th><th class="r">扣款</th><th class="r">實發</th><th class="c">狀態</th><th class="c no-print">操作</th></tr></thead>
       <tbody id="cl-rows"><tr><td colspan="9" class="muted">載入中…</td></tr></tbody></table>
@@ -432,6 +433,7 @@ function payslipHtml(d){
 }
 $('#se-run').addEventListener('click', async()=>{
   const pid=$('#se-pr').value; if(!pid) return msg('#se-msg','請選擇人員',false);
+  const runBtn=$('#se-run'); runBtn.disabled=true; // 防連點：避免重複建立 Claim
   $('#se-result').innerHTML=''; msg('#se-msg','結算中…',true);
   try{
     const res = await api('/api/claims/settle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -452,6 +454,7 @@ $('#se-run').addEventListener('click', async()=>{
         '</tbody></table><p class="muted">請至「出勤稽核」分頁補登簽退後再結算。</p>';
     } else { msg('#se-msg',e.message,false); }
   }
+  finally{ runBtn.disabled=false; }
 });
 
 // ================= 簽核 =================
@@ -465,12 +468,26 @@ async function loadClaims(){
       <td>${d.mode==='monthly'?'<span class="tag month">月薪</span>':'<span class="tag hour">時薪</span>'}</td>
       <td class="r">${NT(d.gross)}</td><td class="r">-${NT(d.deductions)}</td><td class="r"><b>${NT(d.net)}</b></td>
       <td class="c">${c.approved?'<span class="tag ok">已核准</span>':'<span class="tag pend">待核准</span>'}</td>
-      <td class="c no-print">${c.approved?'':`<button class="btn sm" onclick="approve('${c.id}')">核准</button>`}</td></tr>`; }).join('')
+      <td class="c no-print">${c.approved?'':`<button class="btn sm" onclick="approve('${c.id}',this)">核准</button>`}</td></tr>`; }).join('')
       : '<tr><td colspan="9" class="muted">尚無結算單</td></tr>';
   }catch(e){ $('#cl-rows').innerHTML='<tr><td colspan="9" class="err">'+e.message+'</td></tr>'; }
 }
-window.approve=async(id)=>{ try{ await api('/api/claims/'+id+'/approve',{method:'POST'}); loadClaims(); }catch(e){ alert(e.message);} };
+window.approve=async(id,btn)=>{
+  if(btn){ btn.disabled=true; btn.textContent='核准中…'; } // 防連點：避免重複產生 ClaimResponse
+  try{ await api('/api/claims/'+id+'/approve',{method:'POST'}); await loadClaims(); }
+  catch(e){ if(btn){ btn.disabled=false; btn.textContent='核准'; } alert(e.message); }
+};
 $('#ap-reload').addEventListener('click',loadClaims);
+$('#ap-cleanup').addEventListener('click', async()=>{
+  if(!confirm('清除因連點而重複產生的核准/結算資料？\n（每位員工每個結算期間只保留最新一筆）')) return;
+  const b=$('#ap-cleanup'); b.disabled=true; const t=b.textContent; b.textContent='清除中…';
+  try{
+    const r=await api('/api/claims/cleanup',{method:'POST'});
+    alert(`已清除重複：核准紀錄 ${r.deletedClaimResponses} 筆、結算單 ${r.deletedClaims} 筆`);
+    await loadClaims();
+  }catch(e){ alert(e.message); }
+  finally{ b.disabled=false; b.textContent=t; }
+});
 $('#ap-print').addEventListener('click', ()=>{
   const approved=claimsCache.filter(c=>c.approved);
   if(!approved.length){ alert('尚無已核准的結算單，無法列印核銷清冊。'); return; }

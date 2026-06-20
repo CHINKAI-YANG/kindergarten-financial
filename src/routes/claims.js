@@ -159,7 +159,7 @@ router.post('/settle', async (req, res, next) => {
   }
 });
 
-// 列出所有結算單，附帶是否已核准
+// 列出結算單；同一員工＋期間只顯示一張（取最新），避免連點產生的重複洗版
 router.get('/', async (req, res, next) => {
   try {
     const [claims, responses] = await Promise.all([
@@ -169,15 +169,68 @@ router.get('/', async (req, res, next) => {
     const approvedClaimIds = new Set(
       responses.map((r) => r.request?.reference?.split('/').pop()).filter(Boolean)
     );
-    const out = claims.map((c) => ({
-      id: c.id,
-      created: c.created,
-      period: c.billablePeriod,
-      detail: parsePayroll(c),
-      approved: approvedClaimIds.has(c.id),
-    }));
-    out.sort((a, b) => String(b.created).localeCompare(String(a.created)));
+    const byKey = new Map();
+    for (const c of claims) {
+      const d = parsePayroll(c);
+      const key = d ? `${d.practitioner?.employeeId}|${d.period?.start}|${d.period?.end}` : c.id;
+      const entry = { id: c.id, created: c.created, period: c.billablePeriod, detail: d, approved: approvedClaimIds.has(c.id) };
+      const prev = byKey.get(key);
+      if (!prev) { byKey.set(key, entry); continue; }
+      const rep = String(entry.created).localeCompare(String(prev.created)) > 0 ? entry : prev;
+      rep.approved = prev.approved || entry.approved; // 任一重複單已核准即視為已核准
+      byKey.set(key, rep);
+    }
+    const out = [...byKey.values()].sort((a, b) => String(b.created).localeCompare(String(a.created)));
     res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// 清除重複：刪除同一張 Claim 的多餘 ClaimResponse、以及同員工同期間的多餘 Claim
+router.post('/cleanup', async (req, res, next) => {
+  try {
+    const [claims, responses] = await Promise.all([
+      fhir.searchAll('Claim', { _count: 500 }),
+      fhir.searchAll('ClaimResponse', { _count: 500 }),
+    ]);
+    let deletedClaimResponses = 0;
+    let deletedClaims = 0;
+    const newest = (a, b) => String(b.meta?.lastUpdated || b.created || '').localeCompare(String(a.meta?.lastUpdated || a.created || ''));
+
+    // 1) 同一張 Claim 的重複 ClaimResponse：保留最新一筆，其餘刪除
+    const crByClaim = new Map();
+    for (const cr of responses) {
+      const key = cr.request?.reference || cr.id;
+      (crByClaim.get(key) || crByClaim.set(key, []).get(key)).push(cr);
+    }
+    for (const group of crByClaim.values()) {
+      if (group.length <= 1) continue;
+      group.sort(newest);
+      for (const cr of group.slice(1)) {
+        try { await fhir.remove('ClaimResponse', cr.id); deletedClaimResponses++; } catch { /* 可能已被刪 */ }
+      }
+    }
+
+    // 2) 同員工＋期間的重複 Claim：保留最新，其餘連同其 ClaimResponse 一併刪除
+    const claimKey = (c) => c.identifier?.find((i) => i.system === SYSTEMS.claimId)?.value || c.id;
+    const byKey = new Map();
+    for (const c of claims) {
+      const k = claimKey(c);
+      (byKey.get(k) || byKey.set(k, []).get(k)).push(c);
+    }
+    for (const group of byKey.values()) {
+      if (group.length <= 1) continue;
+      group.sort(newest);
+      for (const c of group.slice(1)) {
+        for (const cr of responses.filter((r) => r.request?.reference === `Claim/${c.id}`)) {
+          try { await fhir.remove('ClaimResponse', cr.id); deletedClaimResponses++; } catch { /* 已刪 */ }
+        }
+        try { await fhir.remove('Claim', c.id); deletedClaims++; } catch { /* 已刪 */ }
+      }
+    }
+
+    res.json({ deletedClaimResponses, deletedClaims });
   } catch (e) {
     next(e);
   }

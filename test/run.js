@@ -172,6 +172,22 @@ try {
   ok(txt.includes('王曉明') && txt.includes('陳小美'), '媒體檔包含受款人姓名');
   ok(lines[2].startsWith('T') && lines[2].includes('0052285'), '匯總列含總金額 52285');
 
+  console.log('\n[重複核准去重] 連點造成的重複 ClaimResponse');
+  const crColl = mock.store.get('ClaimResponse');
+  const baseCount = crColl.size;
+  const sampleCR = [...crColl.values()][0];
+  for (let i = 0; i < 3; i++) { // 模擬連點：灌入 3 筆同一張 Claim 的重複核准
+    const id = 'dupcr' + i + Date.now();
+    crColl.set(id, { ...JSON.parse(JSON.stringify(sampleCR)), id });
+  }
+  ok(crColl.size === baseCount + 3, '已模擬 3 筆重複核准');
+  const prevDup = await J('GET', '/api/payout/preview?periodStart=2026-06-01&periodEnd=2026-06-30');
+  ok(prevDup.data.count === 2 && prevDup.data.total === 52285, `撥款清冊自動去重：仍為 2 筆、總額 52285（實得 ${prevDup.data.total}）`);
+  const cleaned = await J('POST', '/api/claims/cleanup');
+  ok(cleaned.data.deletedClaimResponses >= 3, `清除重複：刪除 ${cleaned.data.deletedClaimResponses} 筆多餘核准`);
+  const remain = [...crColl.values()].filter((r) => r.request?.reference === sampleCR.request.reference).length;
+  ok(remain === 1, '清除後該結算單僅留 1 筆核准');
+
   console.log('\n[受款 Patient 去重] 重複結算不重複建立 Patient');
   const ptBefore = mock.store.get('Patient').size;
   const sa3 = await J('POST', '/api/claims/settle', { practitionerId: aId, periodStart: '2026-06-01', periodEnd: '2026-06-30' });
