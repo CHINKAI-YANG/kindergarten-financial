@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>健康幣 — 特約店 POS</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#0b3d39;margin:0;color:#102b28}
+.wrap{max-width:760px;margin:0 auto;padding:18px}
+header{color:#fff;text-align:center;padding:16px 0}
+header h1{margin:0;font-size:22px}header p{margin:4px 0 0;opacity:.8;font-size:14px}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.row{display:flex;gap:10px}
+label{display:block;font-size:13px;color:#5a6b63;margin:0 0 6px}
+input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px}
+button{border:0;border-radius:10px;padding:12px 16px;font-weight:800;cursor:pointer;font-size:15px}
+.btn{background:#0f766e;color:#fff}.btn.ghost{background:#e8f0ec;color:#0b5b54}
+.state{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:15px}
+.pill{border-radius:999px;padding:4px 12px;font-weight:800;font-size:13px}
+.pill.ok{background:#d1fae5;color:#065f46}.pill.no{background:#fee2e2;color:#991b1b}
+.bal{font-size:30px;font-weight:900;color:#0f766e}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:8px}
+.item{border:2px solid #d7e6e2;border-radius:12px;padding:12px;cursor:pointer;background:#fff}
+.item.sel{border-color:#0f766e;background:#ecfdf5}
+.item .nm{font-weight:700;font-size:14px}.item .pr{color:#0f766e;font-weight:800;margin-top:4px}.item .ct{color:#94a3b8;font-size:12px}
+.banner{border-radius:14px;padding:16px;text-align:center;font-size:18px;font-weight:800;margin-top:6px}
+.banner.ok{background:#dcfce7;color:#065f46}.banner.no{background:#fee2e2;color:#991b1b}
+.banner .small{font-weight:500;font-size:14px;margin-top:6px}
+.muted{color:#94a3b8;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>🏪 特約健康商店 · 核銷 POS</h1><p>健康物資白名單 · 風控閘道器 · 商戶端僅見錢包代號（匿名）</p></header>
+
+  <div class="card">
+    <label>① 掃描／輸入 顧客錢包條碼（walletId）</label>
+    <div class="row">
+      <input id="wallet" placeholder="掃描數位卡或靜態條碼" autocomplete="off">
+      <button class="btn ghost" id="lookupBtn">查詢</button>
+    </div>
+    <div class="state" id="state" style="display:none">
+      <div>錢包 <span class="muted" id="wid"></span> <span class="pill" id="pill"></span></div>
+      <div class="bal"><span id="bal">0</span> <span style="font-size:14px">健康幣</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>② 選擇健康物資（僅白名單可核銷）</label>
+    <div class="grid" id="catalog"></div>
+    <div class="row" style="margin-top:12px;align-items:flex-end">
+      <div style="width:110px"><label>數量</label><input id="qty" type="number" value="1" min="1"></div>
+      <button class="btn" id="redeemBtn" style="flex:1">核銷扣款</button>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let CAT = [], SEL = null, CFG = {};
+
+async function api(method, path, body) {
+  const opt = { method, headers: {} };
+  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, ok: r.ok, data };
+}
+
+function renderCatalog() {
+  $('#catalog').innerHTML = CAT.map((it) =>
+    `<div class="item" data-code="${it.code}"><div class="nm">${it.name}</div><div class="pr">${it.price} 幣</div><div class="ct">${it.category}</div></div>`
+  ).join('');
+  document.querySelectorAll('.item').forEach((el) => el.addEventListener('click', () => {
+    document.querySelectorAll('.item').forEach((x) => x.classList.remove('sel'));
+    el.classList.add('sel'); SEL = el.getAttribute('data-code');
+  }));
+}
+
+function banner(html, kind) { $('#banner').innerHTML = '<div class="banner ' + kind + '">' + html + '</div>'; }
+
+async function lookup() {
+  const id = $('#wallet').value.trim();
+  if (!id) return;
+  const r = await api('GET', '/api/pos/lookup/' + id);
+  if (!r.ok) { $('#state').style.display = 'none'; banner('查無此錢包', 'no'); return; }
+  $('#state').style.display = 'flex';
+  $('#wid').textContent = id.slice(0, 8) + '…';
+  $('#bal').textContent = r.data.balance;
+  const pill = $('#pill');
+  pill.textContent = r.data.redeemable ? '可核銷' : r.data.status;
+  pill.className = 'pill ' + (r.data.redeemable ? 'ok' : 'no');
+  $('#banner').innerHTML = '';
+}
+
+async function redeem() {
+  const id = $('#wallet').value.trim();
+  if (!id) { banner('請先掃描錢包', 'no'); return; }
+  if (!SEL) { banner('請選擇健康物資品項', 'no'); return; }
+  const qty = Number($('#qty').value) || 1;
+  const idempotencyKey = 'pos-' + id.slice(0, 8) + '-' + Date.now();
+  const r = await api('POST', '/api/pos/redeem', { walletId: id, itemCode: SEL, qty, posId: 'POS-1', idempotencyKey });
+  if (r.ok) {
+    const it = CAT.find((x) => x.code === SEL);
+    banner('✅ 核銷成功：' + (it ? it.name : SEL) + ' ×' + qty
+      + '<div class="small">扣 ' + r.data.cost + ' 健康幣 · 餘額 ' + r.data.balance + '</div>', 'ok');
+  } else {
+    const why = { 'not-whitelisted': '品項不在健康物資白名單（已通知家屬）', 'daily-limit': '超過單日消費上限（已通知家屬）', 'frozen': '帳戶已凍結／掛失（已通知家屬）', 'insufficient': '餘額不足' };
+    banner('⛔ 核銷遭攔截<div class="small">' + (why[r.data.reason] || r.data.message || '無法核銷') + '</div>', 'no');
+  }
+  await lookup();
+}
+
+async function init() {
+  const c = await api('GET', '/api/pos/catalog');
+  CAT = c.data.items || []; CFG = c.data; renderCatalog();
+  $('#lookupBtn').addEventListener('click', lookup);
+  $('#wallet').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
+  $('#redeemBtn').addEventListener('click', redeem);
+}
+init();
+</script>
+</body>
+</html>

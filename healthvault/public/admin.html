@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>健康幣 — 發卡管理端</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#eef3f0;margin:0;color:#1f2d2a}
+header{background:#0b5b54;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:18px}
+.wrap{max-width:860px;margin:0 auto;padding:18px}
+.card{background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(15,118,110,.1);padding:18px;margin-bottom:14px}
+label{display:block;font-size:13px;color:#6b7c76;margin:8px 0 4px}
+input{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}
+.btn{background:#0f766e;color:#fff}.btn.ghost{background:#e8f0ec;color:#0b5b54}
+.row{display:flex;gap:10px;align-items:flex-end}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #eef1f0}
+th{color:#6b7c76;font-weight:600}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.pill{border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
+.pill.active{background:#d1fae5;color:#065f46}.pill.hold{background:#fee2e2;color:#991b1b}
+.msg{font-size:14px;margin-top:8px}.msg.err{color:#b91c1c}.msg.ok{color:#0f766e}
+.hide{display:none}
+.new{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px;margin-top:10px;font-size:14px}
+</style>
+</head>
+<body>
+<header><h1>🗂️ 健康幣 · 發卡管理端</h1><span id="who"></span></header>
+<div class="wrap">
+
+  <div class="card" id="loginCard">
+    <h3>管理端登入</h3>
+    <label>密碼</label>
+    <div class="row"><input id="pw" type="password" placeholder="預設 health1234"><button class="btn" id="loginBtn">登入</button></div>
+    <div class="msg err" id="loginMsg"></div>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <h3>➕ 註冊使用者並發卡</h3>
+      <div class="row">
+        <div style="flex:2"><label>姓名</label><input id="name" placeholder="例如 王阿嬤"></div>
+        <div style="flex:2"><label>手環 UID（無手機長者選填）</label><input id="wb" placeholder="例如 WB-AMA-001"></div>
+        <button class="btn" id="regBtn">發卡</button>
+      </div>
+      <div class="msg err" id="regMsg"></div>
+      <div id="newCard"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3>👛 錢包總覽</h3><button class="btn ghost" id="reloadBtn">重新整理</button></div>
+      <table><thead><tr><th>姓名</th><th>walletId（條碼）</th><th>手環</th><th>狀態</th><th>餘額</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" style="color:#94a3b8">登入後載入…</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let KEY = null;
+
+async function api(method, path, body) {
+  const opt = { method, headers: {} };
+  if (KEY) opt.headers['x-admin-key'] = KEY;
+  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+
+function pill(status) {
+  const hold = status === 'on-hold';
+  return '<span class="pill ' + (hold ? 'hold' : 'active') + '">' + status + '</span>';
+}
+
+async function loadList() {
+  try {
+    const list = await api('GET', '/api/users');
+    $('#rows').innerHTML = list.length
+      ? list.map((u) => `<tr><td>${u.name || '—'}</td><td class="code">${u.walletId}</td><td>${u.wristbandUid || '—'}</td><td>${pill(u.status)}</td><td><b>${u.balance}</b></td></tr>`).join('')
+      : '<tr><td colspan="5" style="color:#94a3b8">尚無使用者，請先註冊。</td></tr>';
+  } catch (e) { $('#rows').innerHTML = '<tr><td colspan="5" style="color:#b91c1c">' + e.message + '</td></tr>'; }
+}
+
+async function login() {
+  const password = $('#pw').value;
+  try {
+    const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    if (!r.ok) throw new Error('密碼錯誤');
+    KEY = password;
+    $('#loginCard').classList.add('hide');
+    $('#main').classList.remove('hide');
+    $('#who').textContent = '已登入';
+    loadList();
+  } catch (e) { $('#loginMsg').textContent = e.message; }
+}
+
+async function register() {
+  const name = $('#name').value.trim();
+  if (!name) { $('#regMsg').textContent = '請輸入姓名'; return; }
+  $('#regMsg').textContent = '';
+  try {
+    const wb = $('#wb').value.trim();
+    const u = await api('POST', '/api/users', { name, wristbandUid: wb || undefined });
+    $('#newCard').innerHTML = '<div class="new">✅ 已發卡給 <b>' + u.name + '</b><br>walletId（條碼）：<span class="code">' + u.walletId + '</span><br>請交付使用者於消費者 App 登入，或印製為實體卡／靜態條碼。</div>';
+    $('#name').value = ''; $('#wb').value = '';
+    loadList();
+  } catch (e) { $('#regMsg').textContent = e.message; }
+}
+
+$('#loginBtn').addEventListener('click', login);
+$('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+$('#regBtn').addEventListener('click', register);
+$('#reloadBtn').addEventListener('click', loadList);
+</script>
+</body>
+</html>

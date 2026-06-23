@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>健康幣 — 社區節點 Kiosk</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,"Microsoft JhengHei",sans-serif;background:#f5faf8;margin:0;color:#13211e}
+header{background:#0f766e;color:#fff;padding:20px 24px;text-align:center}
+header h1{margin:0;font-size:30px}
+header p{margin:6px 0 0;font-size:18px;opacity:.9}
+.wrap{max-width:680px;margin:0 auto;padding:24px}
+.card{background:#fff;border-radius:22px;box-shadow:0 10px 30px rgba(15,118,110,.14);padding:28px;margin-bottom:20px}
+label{display:block;font-size:22px;font-weight:700;margin:14px 0 8px}
+input{width:100%;padding:18px;border:3px solid #99c7bf;border-radius:14px;font-size:26px;text-align:center}
+button{border:0;border-radius:16px;font-size:28px;font-weight:800;cursor:pointer;width:100%;padding:22px}
+.go{background:#0f766e;color:#fff}
+.again{background:#e8f0ec;color:#0b5b54;font-size:22px;padding:16px;margin-top:14px}
+.result{text-align:center;padding:10px 0}
+.result .big{font-size:64px;font-weight:900;color:#0f766e;line-height:1.1}
+.result .sub{font-size:24px;margin-top:8px}
+.result.err .big{color:#b91c1c;font-size:40px}
+.hint{font-size:18px;color:#5a6b63;text-align:center;line-height:1.6}
+.kbd{font-size:20px;color:#5a6b63}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏘️ 健康存錢筒 · 社區節點</h1>
+  <p>長者走路集點 · 大字無障礙 · 手環代同步</p>
+</header>
+<div class="wrap">
+  <div class="card" id="form">
+    <label>① 手環 UID</label>
+    <input id="wb" placeholder="刷手環或輸入 UID" autocomplete="off">
+    <label>② 本期累計步數</label>
+    <input id="steps" type="number" placeholder="例如 35000" inputmode="numeric">
+    <p class="kbd">提示：手環長期累計步數，系統依規則換算健康幣（防偽會檢核步速）。</p>
+    <button class="go" id="go">🚶 同步並發放健康幣</button>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="result" id="result"></div>
+    <button class="again" id="again">↺ 換下一位長者</button>
+  </div>
+
+  <p class="hint">本機免登入，供社區幹事協助操作。<br>資料以 FHIR 標準上傳，核銷請至特約健康商店。</p>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+function say(text) {
+  try {
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-TW'; u.rate = 0.95;
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    }
+  } catch (e) { /* 無語音則略過 */ }
+}
+
+async function api(method, path, body) {
+  const opt = { method, headers: {} };
+  if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || data.message || ('HTTP ' + r.status));
+  return data;
+}
+
+function showResult(html, isErr) {
+  $('#form').style.display = 'none';
+  $('#resultCard').style.display = 'block';
+  const box = $('#result');
+  box.className = 'result' + (isErr ? ' err' : '');
+  box.innerHTML = html;
+}
+
+async function go() {
+  const wristbandUid = $('#wb').value.trim();
+  const steps = Number($('#steps').value);
+  if (!wristbandUid || !(steps > 0)) { showResult('<div class="big">請輸入手環與步數</div>', true); say('請輸入手環與步數'); return; }
+  try {
+    const r = await api('POST', '/api/engine/batch-sync', { nodeId: 'KIOSK', items: [{ wristbandUid, steps, syncWindowHours: 168 }] });
+    const item = r.results[0];
+    if (!item.ok) { showResult('<div class="big">無法發放</div><div class="sub">' + (item.error || '請洽櫃台') + '</div>', true); say('發放失敗，' + (item.error || '請洽櫃台')); return; }
+    showResult('<div class="sub">本次同步 ' + item.steps + ' 步</div>'
+      + '<div class="big">+' + item.minted + ' 健康幣</div>'
+      + '<div class="sub">目前餘額 <b>' + item.balance + '</b> 健康幣</div>'
+      + (item.aerobic ? '<div class="sub">（達有氧標準，已加權）</div>' : ''));
+    say('恭喜！您今天獲得 ' + item.minted + ' 個健康幣，目前餘額 ' + item.balance + ' 個。');
+  } catch (e) {
+    showResult('<div class="big">系統忙線</div><div class="sub">' + e.message + '</div>', true);
+    say('系統忙線，請稍後再試');
+  }
+}
+
+function reset() {
+  $('#resultCard').style.display = 'none';
+  $('#form').style.display = 'block';
+  $('#wb').value = ''; $('#steps').value = ''; $('#wb').focus();
+}
+
+$('#go').addEventListener('click', go);
+$('#again').addEventListener('click', reset);
+$('#steps').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+</script>
+</body>
+</html>

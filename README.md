@@ -1,3 +1,5 @@
+> 📂 本 repo 另含子專案 [**健康幣 HealthVault**](./healthvault/)：以 FHIR R4 打造的封閉型健康點數平台（走路賺幣、健康物資核銷）。詳見 [`healthvault/README.md`](./healthvault/README.md)。
+
 # 益民幼兒園 — FHIR 智慧行政：出勤打卡與薪資核銷一體化系統
 
 以 **HL7 FHIR（R4）** 國際醫療資訊標準打造的幼兒園人事出勤與發薪解決方案。

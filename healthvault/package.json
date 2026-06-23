@@ -1,0 +1,28 @@
+{
+  "name": "healthvault-fhir",
+  "version": "1.0.0",
+  "description": "健康幣 HealthVault — 以 FHIR 醫療標準打造的封閉型健康點數平台（走路賺幣、健康物資核銷）。健康數據引擎 + 錢包服務，資源上傳 FHIR R4 伺服器。",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node test/run.js"
+  },
+  "keywords": [
+    "fhir",
+    "hl7",
+    "health-coin",
+    "steps",
+    "wallet",
+    "preventive-care"
+  ],
+  "author": "HealthVault 團隊",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
